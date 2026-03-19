@@ -128,8 +128,9 @@ The more specific your prompt, the better the automation. Use these templates to
     3. Handles **Authentication dynamically** by building the `Authorization: Bearer ${process.env.API_TOKEN}` header natively in the execution block, ensuring secrets NEVER leak into your visible `.feature` files.
 
 ### 🧠 G. TypeScript DTOs & Strict Typing (`models/`)
-*   **Prompt**: *"Wait for the GET request to `/api/users/1`. Generate a TypeScript DTO interface for the User response and use it to assert the `email` property."*
-*   **What the AI does**: It abandons implicit `any` parsing. It intelligently creates an `export interface User {...}` file in your project's `models/` directory, imports it into your step definition, and casts the JSON as `User` to guarantee type-safe compile-time assertions!
+*   **Prompt (Assertions)**: *"Wait for the GET request to `/api/users/1`. Generate a TypeScript DTO interface for the User response and use it to assert the `email` property."*
+*   **Prompt (Modification)**: *"Intercept the GET `/api/config` response. Use the corresponding DTO to change the `featureFlag` to `true` and fulfill the request with the modified body."*
+*   **What the AI does**: It abandons implicit `any` parsing. It intelligently creates `export interface ...` files in your project's `models/` directory. In your step definitions, it casts the JSON to these types to guarantee type-safe compile-time assertions and provides a structured way to modify/mock responses natively!
 
 ---
 

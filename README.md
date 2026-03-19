@@ -16,9 +16,12 @@ A powerful Model Context Protocol (MCP) server designed to automate Gherkin-base
 
 ### 1. Installation
 ```bash
-# Clone the repository
-git clone <this-repo-url>
-cd playwright-bdd-pom-mcp
+# Install from Git (Recommended for latest features)
+npm install -g github:Rohit5688/playwright-bdd-mcp
+
+# OR Clone and build locally
+git clone https://github.com/Rohit5688/playwright-bdd-mcp.git
+cd playwright-bdd-mcp
 
 # Install and build
 npm install
