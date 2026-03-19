@@ -165,3 +165,13 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 - **Key Features**:
   - **Coverage-Guided Gen**: Generate tests based on gaps in LCOV reports.
   - **One-Click Explanation**: `explain_failure` tool providing natural language RCA + fix suggestions.
+
+### Phase 41: Automated Accessibility (a11y) Testing
+**Priority**: ★★★★☆ (Standard Compliance)
+**Objective**: Build accessibility scanning into the core BDD workflow with configurable standards.
+- **LDA Requirements**: Axe integration strategy (using `@axe-core/playwright`), and mapping `mcp-config.json` standard selections to the axe-core engine.
+- **Key Features**: 
+  - **Config-Driven Standards**: Define target compliance (e.g., `["wcag2aa", "wcag21aa"]`) in `mcp-config.json`.
+  - `checkAccessibility()` step definition that respects the configured standards.
+  - Automated a11y failure reporting and HTML report generation.
+  - Basic a11y score per-page in the analysis report.
