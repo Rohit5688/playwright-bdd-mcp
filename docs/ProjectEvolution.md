@@ -49,20 +49,28 @@ This analysis documents the technical journey of the Playwright-BDD MCP tool, tr
 *   **Unified Workflow**: Direct application of AI-generated tests to the workspace with one-click "Apply" functionality.
 *   **McpBridgeService**: A robust communication layer in the extension to handle stdio/SSE connectivity with the MCP server.
 
+## 🛡️ 6. The Security Hardening Era (Phase 35)
+**Focus**: Defensive Infrastructure & Token Governance.
+
+*   **Multi-Layered Sanitization**: Implementation of `SecurityUtils` for uniform response redaction (masking Bearer tokens/passwords) and shell argument sanitization.
+*   **Path Governance**: Strict validation of `FileWriterService` paths to prevent cross-root escapes and traversal attacks.
+*   **Proactive Secret Auditing**: Automatic scanning of AI-generated code for hardcoded credentials BEFORE execution, with enforced fix instructions.
+*   **Config-Driven Safety**: Transitioned hardcoded timeouts (e.g., 2-minute test run) to project-level configuration in `mcp-config.json`.
+
 ---
 
 ## 📊 Summary of Technical Shifts
 
-| Aspect | Early Phase (v0.1) | Mature Phase (v1.0) | Integration Era (v1.1+) |
+| Aspect | Early Phase (v0.1) | Mature Phase (v1.0) | Security Era (v1.2) |
 | :--- | :--- | :--- | :--- |
 | **Locators** | Brittle CSS/XPath | Semantic ARIA-based (AOM) | AI-Augmented AOM with Healer |
 | **Maintenance** | Manual CLI commands | Autonomous Self-Healing | Integrated IDE Smart Fixes |
-| **Config** | Hardcoded Defaults | Centralized Governance (`mcp-config.json`) | IDE-Assisted Configuration UI |
-| **Auth** | Single .env credential | Multi-role Environment Strings | Visual Credential Management |
+| **Security** | Baseline ( .env) | multi-role JSON store | **Defense-in-Depth (Redaction, Path Guards, Code Audit)** |
+| **Config** | Hardcoded Defaults | Centralized Governance | **Customizable Execution Governance (Timeouts, Allow-lists)** |
 | **Stability** | Stateless retries | Persistent Session Tracking | Multi-Agent Collaborative Healing |
 | **User Experience** | CLI-based | MCP Tool-based | Native VS Code Extension UI |
 
 ---
 
 > [!NOTE]
-> The project has transitioned from a **utility** that helps write tests to an **orchestrator** that governs the entire automation ecosystem.
+> The project has evolved from a simple generator into a **secure orchestrator** that not only automates testing but also proactively defends the developer's environment and credentials.
