@@ -12,6 +12,14 @@ A powerful Model Context Protocol (MCP) server designed to automate Gherkin-base
 
 ---
 
+## 📚 Documentation
+For detailed guides and advanced usage, refer to the following resources:
+- **[User Guide](docs/UserGuide.md)**: Learn about "Power Prompts", API fixtures, and TypeScript DTO generation.
+- **[Docker & Deployment](docs/DockerSetup.md)**: Comprehensive guide for local, remote, and AWS containerization.
+- **[Project Evolution](docs/ProjectEvolution.md)**: A technical look at the project's architecture and development milestones.
+
+---
+
 ## Quickstart
 
 ### 1. Installation
