@@ -17,6 +17,7 @@ For detailed guides and advanced usage, refer to the following resources:
 - **[User Guide](docs/UserGuide.md)**: Learn about "Power Prompts", API fixtures, and TypeScript DTO generation.
 - **[Docker & Deployment](docs/DockerSetup.md)**: Comprehensive guide for local, remote, and AWS containerization.
 - **[Project Evolution](docs/ProjectEvolution.md)**: A technical look at the project's architecture and development milestones.
+- **[Implementation Plan](docs/ImplementationPlan.md)**: Detailed roadmap of recent and upcoming feature phases.
 
 ---
 

@@ -41,15 +41,26 @@ This analysis documents the technical journey of the Playwright-BDD MCP tool, tr
 
 ---
 
+## 🖥️ 5. The Integration Era (Phase 25+)
+**Focus**: Seamless Developer Experience & UI.
+
+*   **VS Code Extension Integration**: Bridging the gap between the MCP server and the IDE.
+*   **AI BDD Assistant UI**: Introduction of a dedicated Webview in VS Code for natural language test generation and project analysis.
+*   **Unified Workflow**: Direct application of AI-generated tests to the workspace with one-click "Apply" functionality.
+*   **McpBridgeService**: A robust communication layer in the extension to handle stdio/SSE connectivity with the MCP server.
+
+---
+
 ## 📊 Summary of Technical Shifts
 
-| Aspect | Early Phase (v0.1) | Mature Phase (v1.0) |
-| :--- | :--- | :--- |
-| **Locators** | Brittle CSS/XPath | Semantic ARIA-based (AOM) |
-| **Maintenance** | Manual CLI commands | Autonomous Self-Healing |
-| **Config** | Hardcoded Defaults | Centralized Governance (`mcp-config.json`) |
-| **Auth** | Single .env credential | Multi-role Environment Strings |
-| **Stability** | Stateless retries | Persistent Session Tracking |
+| Aspect | Early Phase (v0.1) | Mature Phase (v1.0) | Integration Era (v1.1+) |
+| :--- | :--- | :--- | :--- |
+| **Locators** | Brittle CSS/XPath | Semantic ARIA-based (AOM) | AI-Augmented AOM with Healer |
+| **Maintenance** | Manual CLI commands | Autonomous Self-Healing | Integrated IDE Smart Fixes |
+| **Config** | Hardcoded Defaults | Centralized Governance (`mcp-config.json`) | IDE-Assisted Configuration UI |
+| **Auth** | Single .env credential | Multi-role Environment Strings | Visual Credential Management |
+| **Stability** | Stateless retries | Persistent Session Tracking | Multi-Agent Collaborative Healing |
+| **User Experience** | CLI-based | MCP Tool-based | Native VS Code Extension UI |
 
 ---
 

@@ -74,7 +74,10 @@ ${reusedContext.join('\n')}
 18. Mid-Test HTTP & Auth: For pure API calls, extract the \`request\` fixture (\`async ({ page, request }) => {...}\`).
     - **Payloads**: NEVER hardcode massive JSON bodies in Gherkin text. If the user step says \`using payload "fixtures/file.json"\`, you MUST extract the body using \`JSON.parse(fs.readFileSync(path, 'utf8'))\` dynamically inside the step definition.
     - **Authentication**: NEVER hardcode API tokens or secrets in Gherkin. If the step mentions "Bearer token", "Basic auth", etc., construct the \`Authorization\` header dynamically in the step definition using \`process.env\` variables (e.g., \`Authorization: Bearer \${process.env.API_TOKEN}\`).
-19. TypeScript DTOs & Models: If handling complex API JSON payloads/responses, or if the user requests strong typing, NEVER use implicit \`any\`. You MUST generate a TypeScript \`export interface ...\` file representing the data shape and save it in the \`models/\` directory. Import and use this Interface in your step definitions for type-safe assertions.
+19. TypeScript DTOs & Models: If handling complex API JSON payloads/responses, or if the user requests strong typing, NEVER use implicit \`any\`. You MUST generate a TypeScript \`export interface ...\` file representing the data shape and save it in the \`models/\` directory. Use these DTOs to:
+    - **Assertions**: Import and cast responses to the Interface for type-safe compile-time assertions.
+    - **Modification**: Use the Interface to construct or modify JSON bodies before fulfilling a routed request (e.g., \`route.fulfill({ body: JSON.stringify(modifiedObj) })\`).
+    - **Reuse**: Encapsulate complex validation logic or payload generation within these model types.
 
 --- PLAYWRIGHT-BDD SPECIFIC RULES ---
 - Step definitions MUST be defined using \`playwright-bdd\`, not standard Cucumber:
