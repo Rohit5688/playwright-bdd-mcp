@@ -131,3 +131,37 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
     - `docs/McpConfig.md`: Full schema documentation.
     - `docs/Workflows.md`: Example LLM conversation flows.
     - Updated `DockerSetup.md` for remote SSE/HTTP modes.
+
+---
+
+## 🚀 The Migration & Enterprise Era (Phases 37-40)
+
+> [!IMPORTANT]
+> **Mandatory Prerequisite**: For every phase below, a "Logical Design Analysis" (LDA) must be performed and approved before any code changes. The LDA must evaluate architectural impact, backward compatibility, and credit efficiency.
+
+### Phase 37: Selenium → Playwright Migration Engine
+**Priority**: ★★★★★ (High Impact / ROI)
+**Objective**: Build `migrate_from_selenium` tool to automate legacy suite modernization.
+- **LDA Requirements**: Define AST parsing strategy (ts-morph/tree-sitter), locator mapping rules, and AWS/API fixture wrapping logic.
+- **Key Features**: Phased migration (--dry-run, --pages-only), smart locator translation, and migration reporting.
+
+### Phase 38: Jira + Xray Enterprise Integration
+**Priority**: ★★★★★ (Critical Traceability)
+**Objective**: End-to-end requirement-to-execution traceability.
+- **LDA Requirements**: API authentication strategy for Jira/Xray (Cloud vs Server), Cucumber JSON mapping, and result reporting logic.
+- **Key Features**: `fetch_jira_requirements`, `push_tests_to_xray`, `report_execution_to_xray`.
+
+### Phase 39: Maintenance & Developer Experience
+**Priority**: ★★★★☆
+**Objective**: Keep the migrated codebase clean and data-driven.
+- **Key Features**: 
+  - **Auto-Refactoring**: `suggest_refactorings` to merge duplicate steps/POM methods.
+  - **Data Factories**: `generate_fixture` using faker-js for typed test data.
+  - **Visual Regression**: Basic `toHaveScreenshot` integration and rebaselining tool.
+
+### Phase 40: Advanced Analytics & Optimization
+**Priority**: ★★★★☆
+**Objective**: Maximize efficiency and debugging speed.
+- **Key Features**:
+  - **Coverage-Guided Gen**: Generate tests based on gaps in LCOV reports.
+  - **One-Click Explanation**: `explain_failure` tool providing natural language RCA + fix suggestions.
