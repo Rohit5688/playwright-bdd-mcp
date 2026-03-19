@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { validateProjectPath } from '../utils/SecurityUtils.js';
 
 export interface GeneratedFile {
   path: string;      // relative path e.g. "features/login.feature"
@@ -20,9 +21,15 @@ interface ManifestEntry {
  * 18B: Maintains a .mcp-manifest.json to track files written by the MCP.
  * If a file was manually modified since last write, surfaces a warning instead
  * of silently overwriting the human's work.
+ *
+ * Phase 35: Enforces a directory allow-list and path traversal guard.
+ * Only files targeting safe directories can be written by the LLM.
  */
 export class FileWriterService {
   private readonly MANIFEST_FILE = '.mcp-manifest.json';
+
+  /** Directories that LLM-generated files are allowed to be written into */
+  private readonly ALLOWED_DIRS = ['features', 'step-definitions', 'pages', 'test-data', 'fixtures', 'models'];
 
   private loadManifest(projectRoot: string): Record<string, ManifestEntry> {
     const manifestPath = path.join(projectRoot, this.MANIFEST_FILE);
@@ -47,6 +54,11 @@ export class FileWriterService {
    * Writes every file in the array to disk under `projectRoot`.
    * Creates any intermediate directories automatically.
    * Warns if a file was manually modified since the last MCP write.
+   *
+   * Phase 35 Security:
+   *  - Validates that every file path stays within projectRoot (no traversal)
+   *  - Enforces a directory allow-list (only safe dirs for LLM-generated code)
+   *
    * Returns the list of absolute paths written, plus any warnings.
    */
   public writeFiles(projectRoot: string, files: GeneratedFile[]): { written: string[]; warnings: string[] } {
@@ -55,9 +67,26 @@ export class FileWriterService {
     const manifest = this.loadManifest(projectRoot);
 
     for (const file of files) {
-      const absolutePath = path.join(projectRoot, file.path);
-      const dir = path.dirname(absolutePath);
+      // Phase 35: Path traversal guard
+      let absolutePath: string;
+      try {
+        absolutePath = validateProjectPath(projectRoot, file.path);
+      } catch (e: any) {
+        warnings.push(`⛔ BLOCKED: "${file.path}" — ${e.message}`);
+        continue;
+      }
 
+      // Phase 35: Directory allow-list enforcement
+      const topDir = file.path.split(/[/\\]/)[0] ?? '';
+      if (!topDir || !this.ALLOWED_DIRS.includes(topDir)) {
+        warnings.push(
+          `⛔ BLOCKED: "${file.path}" — writes are only allowed in: ${this.ALLOWED_DIRS.join(', ')}. ` +
+          `To modify root-level files, use the appropriate dedicated tool (manage_config, manage_env, etc.).`
+        );
+        continue;
+      }
+
+      const dir = path.dirname(absolutePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }

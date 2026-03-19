@@ -1,6 +1,19 @@
 import type { ITestGenerator, GeneratedFile, TestGenerationResult } from '../interfaces/ITestGenerator.js';
 import type { CodebaseAnalysisResult } from '../interfaces/ICodebaseAnalyzer.js';
 
+/**
+ * TestGenerationService — Phases 23–31
+ *
+ * Builds a comprehensive LLM system instruction that governs how the client AI
+ * generates Playwright-BDD test suites (Gherkin + Page Objects + Step Definitions).
+ *
+ * Key responsibilities:
+ *  - Injects project context (existing POMs, steps, naming conventions)
+ *  - Enforces 19 mandatory rules covering SOLID patterns, API interception,
+ *    multi-tab handling, auth fixtures, TypeScript DTOs, and more
+ *  - Reads team preferences from mcp-config.json (tags, wait strategy, auth)
+ *  - Outputs a structured JSON schema the AI must follow
+ */
 export class TestGenerationService implements ITestGenerator {
   
   public async generatePromptInstruction(
@@ -12,17 +25,16 @@ export class TestGenerationService implements ITestGenerator {
   ): Promise<string> {
     
     // --- Phase 23: Extract team preferences from mcp-config.json if present ---
-    const cfg = (analysisResult as any).mcpConfig;
-    const allowedTags: string[] = cfg?.tags ?? ['@smoke', '@regression', '@e2e'];
+    const cfg = analysisResult.mcpConfig;
+    const allowedTags: string[] = cfg?.allowedTags ?? ['@smoke', '@regression', '@e2e'];
     const bgThreshold: number = cfg?.backgroundBlockThreshold ?? 3;
     const waitStrategy: string = cfg?.waitStrategy ?? 'networkidle';
     const authStrategy: string = cfg?.authStrategy ?? 'users-json';
-    const userRoles: { environment: string; roles: string[]; helperImport: string } | undefined
-      = (analysisResult as any).userRoles;
+    const userRoles = analysisResult.userRoles;
 
     // Build env context from analysis result if present
-    const envContext = (analysisResult as any).envConfig?.keys?.length
-      ? `\n--- Available .env Variables (use process.env.KEY, never hardcode) ---\n${((analysisResult as any).envConfig.keys as string[]).map((k: string) => `- ${k}`).join('\n')}`
+    const envContext = analysisResult.envConfig?.keys?.length
+      ? `\n--- Available .env Variables (use process.env.KEY, never hardcode) ---\n${(analysisResult.envConfig.keys as string[]).map((k: string) => `- ${k}`).join('\n')}`
       : '';
 
     // Build user context when users-json auth is configured

@@ -26,6 +26,17 @@ export interface CodebaseAnalysisResult {
         version: string;
         upgradeNeeded: boolean;
         allowedTags: string[];
+        backgroundBlockThreshold?: number;
+        waitStrategy?: 'networkidle' | 'domcontentloaded' | 'load';
+        authStrategy?: 'none' | 'users-json' | 'env';
+    };
+    userRoles?: {
+        environment: string;
+        roles: string[];
+        helperImport: string;
+    };
+    envConfig?: {
+        keys: string[];
     };
     recommendation: string;
 }

@@ -1,8 +1,21 @@
+/**
+ * TestGenerationService — Phases 23–31
+ *
+ * Builds a comprehensive LLM system instruction that governs how the client AI
+ * generates Playwright-BDD test suites (Gherkin + Page Objects + Step Definitions).
+ *
+ * Key responsibilities:
+ *  - Injects project context (existing POMs, steps, naming conventions)
+ *  - Enforces 19 mandatory rules covering SOLID patterns, API interception,
+ *    multi-tab handling, auth fixtures, TypeScript DTOs, and more
+ *  - Reads team preferences from mcp-config.json (tags, wait strategy, auth)
+ *  - Outputs a structured JSON schema the AI must follow
+ */
 export class TestGenerationService {
     async generatePromptInstruction(testDescription, projectRoot, analysisResult, customWrapperPackage, baseUrl) {
         // --- Phase 23: Extract team preferences from mcp-config.json if present ---
         const cfg = analysisResult.mcpConfig;
-        const allowedTags = cfg?.tags ?? ['@smoke', '@regression', '@e2e'];
+        const allowedTags = cfg?.allowedTags ?? ['@smoke', '@regression', '@e2e'];
         const bgThreshold = cfg?.backgroundBlockThreshold ?? 3;
         const waitStrategy = cfg?.waitStrategy ?? 'networkidle';
         const authStrategy = cfg?.authStrategy ?? 'users-json';

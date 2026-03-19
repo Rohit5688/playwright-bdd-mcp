@@ -91,7 +91,7 @@ Credentials are stored in `test-data/users.{env}.json` (e.g. `users.staging.json
 - Use `manage_users { action: "scaffold" }` to generate templates.
 - Access them in your Page Objects via the generated `user-helper.ts`:
   ```typescript
-  import { getUser } from '../test-data/user-helper';
+  import { getUser } from '../test-data/user-helper.js';
   const { username, password } = getUser('admin');
   ```
 

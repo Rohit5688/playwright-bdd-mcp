@@ -14,9 +14,10 @@ import { FileWriterService } from "./services/FileWriterService.js";
 import { EnvManagerService } from "./services/EnvManagerService.js";
 import { ProjectSetupService } from "./services/ProjectSetupService.js";
 import { SuiteSummaryService } from "./services/SuiteSummaryService.js";
-import { McpConfigService } from "./services/McpConfigService.js";
+import { McpConfigService, DEFAULT_CONFIG } from './services/McpConfigService.js';
 import { UserStoreService } from "./services/UserStoreService.js";
 import { ProjectMaintenanceService } from "./services/ProjectMaintenanceService.js";
+import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
 // SOLID: Dependency Injection Root
 const analyzer = new CodebaseAnalyzerService();
 const generator = new TestGenerationService();
@@ -237,305 +238,271 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     };
 });
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name === "analyze_codebase") {
-        const { projectRoot, customWrapperPackage } = request.params.arguments;
-        // Proactively maintenance/upgrade before analysis
-        await maintenance.ensureUpToDate(projectRoot);
-        const config = mcpConfig.read(projectRoot);
-        const resolvedWrapper = customWrapperPackage || config.basePageClass;
-        const analysis = await analyzer.analyze(projectRoot, resolvedWrapper);
-        lastAnalysisResult = analysis; // store in memory for ensuing generator call
-        // --- Phase 23: Inject mcp-config.json and user store context ---
-        analysis.mcpConfig = config;
-        // Read available user roles for the current environment (to hint the LLM)
-        const userStoreResult = userStore.read(projectRoot, config.currentEnvironment);
-        if (userStoreResult.exists && userStoreResult.roles.length > 0) {
-            analysis.userRoles = {
-                environment: config.currentEnvironment,
-                roles: userStoreResult.roles,
-                helperImport: `import { getUser } from '../test-data/user-helper.js';`
-            };
-        }
-        lastAnalysisResult = analysis; // store in memory for ensuing generator call
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: JSON.stringify(analysis, null, 2)
+    const { name, arguments: args } = request.params;
+    try {
+        switch (name) {
+            case "analyze_codebase": {
+                const { projectRoot, customWrapperPackage } = args;
+                await maintenance.ensureUpToDate(projectRoot);
+                const config = mcpConfig.read(projectRoot);
+                const resolvedWrapper = customWrapperPackage || config.basePageClass;
+                const analysis = await analyzer.analyze(projectRoot, resolvedWrapper);
+                analysis.mcpConfig = {
+                    version: config.version || '0.0.0',
+                    upgradeNeeded: (config.version || '0.0.0') < DEFAULT_CONFIG.version,
+                    allowedTags: config.tags,
+                    backgroundBlockThreshold: config.backgroundBlockThreshold,
+                    waitStrategy: config.waitStrategy,
+                    authStrategy: config.authStrategy
+                };
+                const userStoreResult = userStore.read(projectRoot, config.currentEnvironment);
+                if (userStoreResult.exists && userStoreResult.roles.length > 0) {
+                    analysis.userRoles = {
+                        environment: config.currentEnvironment,
+                        roles: userStoreResult.roles,
+                        helperImport: `import { getUser } from '../test-data/user-helper.js';`
+                    };
                 }
-            ]
-        };
-    }
-    if (request.params.name === "generate_gherkin_pom_test_suite") {
-        const { testDescription, projectRoot, customWrapperPackage, baseUrl } = request.params.arguments;
-        // Ensure project is safe/scaffolded before generation
-        await maintenance.ensureUpToDate(projectRoot);
-        const config = mcpConfig.read(projectRoot);
-        const resolvedWrapper = customWrapperPackage || config.basePageClass;
-        // Fallback if not analyzed yet
-        if (!lastAnalysisResult) {
-            lastAnalysisResult = await analyzer.analyze(projectRoot, resolvedWrapper);
-        }
-        const instruction = await generator.generatePromptInstruction(testDescription, projectRoot, lastAnalysisResult, resolvedWrapper, baseUrl);
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: instruction
+                const envResult = envManager.read(projectRoot);
+                if (envResult.exists) {
+                    analysis.envConfig = { keys: envResult.keys };
                 }
-            ]
-        };
-    }
-    if (request.params.name === "run_playwright_test") {
-        const { projectRoot, specificTestArgs, tags } = request.params.arguments;
-        // Final check before execution
-        await maintenance.ensureUpToDate(projectRoot);
-        // 21B: Build grep arg from tags if provided
-        const grepArg = tags ? `--grep "${tags}"` : '';
-        const combinedArgs = [specificTestArgs, grepArg].filter(Boolean).join(' ');
-        const result = await runner.runTests(projectRoot, combinedArgs || undefined);
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: result.output
-                }
-            ]
-        };
-    }
-    if (request.params.name === "summarize_suite") {
-        const { projectRoot } = request.params.arguments;
-        const report = suiteSummary.summarize(projectRoot);
-        return { content: [{ type: "text", text: report.plainEnglishSummary }] };
-    }
-    if (request.params.name === "inspect_page_dom") {
-        const { url, waitForSelector, storageState, includeIframes, loginMacro } = request.params.arguments;
-        const domTree = await domInspector.inspect(url, waitForSelector, storageState, includeIframes, loginMacro);
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: domTree
-                }
-            ]
-        };
-    }
-    if (request.params.name === "self_heal_test") {
-        const { testOutput, pageUrl } = request.params.arguments;
-        // 1. Classify the failure and build a heal instruction
-        const analysis = selfHealer.analyzeFailure(testOutput);
-        let response = analysis.healInstruction;
-        // 2. If it is a scripting failure AND a URL is provided, automatically re-inspect the DOM
-        //    so the AI gets live, accurate locators as part of the same tool call
-        if (analysis.canAutoHeal && pageUrl) {
-            const liveDom = await domInspector.inspect(pageUrl);
-            response += `\n\n--- LIVE DOM SNAPSHOT (use these selectors to fix locators) ---\n${liveDom}`;
-        }
-        return {
-            content: [
-                {
-                    type: "text",
-                    text: response
-                }
-            ]
-        };
-    }
-    if (request.params.name === "validate_and_write") {
-        const { projectRoot, files, pageUrl } = request.params.arguments;
-        const MAX_RETRIES = 3;
-        // 18C: Use server-side session counter instead of resetting per call
-        const currentAttempt = (retrySessionMap.get(projectRoot) ?? 0) + 1;
-        retrySessionMap.set(projectRoot, currentAttempt);
-        // STEP 1: Write current file set to disk (includes 18B overwrite warnings)
-        const writeResult = fileWriter.writeFiles(projectRoot, files);
-        const writtenFiles = writeResult.written;
-        const overwriteWarnings = writeResult.warnings;
-        // STEP 2: Run the test suite
-        const runResult = await runner.runTests(projectRoot);
-        const lastOutput = runResult.output;
-        const warningBlock = overwriteWarnings.length > 0
-            ? `\n\n${overwriteWarnings.join('\n')}`
-            : '';
-        // STEP 3: If passed, reset counter and celebrate!
-        if (runResult.passed) {
-            retrySessionMap.delete(projectRoot);
-            return {
-                content: [{
-                        type: "text",
-                        text: `✅ SUCCESS on attempt ${currentAttempt}/${MAX_RETRIES}!${warningBlock}\n\nAll tests passed. Files written and validated:\n${writtenFiles.map((f) => `  - ${f}`).join('\n')}\n\nYou can now commit these files to your repository.`
-                    }]
-            };
-        }
-        // STEP 4: Classify the failure
-        const analysis = selfHealer.analyzeFailure(lastOutput);
-        // If it can't be healed, reset counter and stop early
-        if (!analysis.canAutoHeal) {
-            retrySessionMap.delete(projectRoot);
-            return {
-                content: [{
-                        type: "text",
-                        text: `⚠️ AUTO-HEAL BLOCKED after attempt ${currentAttempt}/${MAX_RETRIES}\n\n${analysis.healInstruction}\n\nThe failure appears to be caused by the application returning unexpected data. A human needs to investigate.`
-                    }]
-            };
-        }
-        // STEP 5: Build healing instruction with optional fresh DOM snapshot
-        let healingContext = analysis.healInstruction;
-        if (pageUrl) {
-            try {
-                const dom = await domInspector.inspect(pageUrl);
-                healingContext += `\n\n--- FRESH DOM SNAPSHOT (Attempt ${currentAttempt}) ---\n${dom}`;
+                lastAnalysisResult = analysis;
+                return { content: [{ type: "text", text: sanitizeOutput(JSON.stringify(analysis, null, 2)) }] };
             }
-            catch (e) {
-                healingContext += `\n\n[DOM re-inspection failed: ${e.message}]`;
+            case "generate_gherkin_pom_test_suite": {
+                const { testDescription, projectRoot, customWrapperPackage, baseUrl } = args;
+                await maintenance.ensureUpToDate(projectRoot);
+                const config = mcpConfig.read(projectRoot);
+                const resolvedWrapper = customWrapperPackage || config.basePageClass;
+                if (!lastAnalysisResult) {
+                    lastAnalysisResult = await analyzer.analyze(projectRoot, resolvedWrapper);
+                }
+                const instruction = await generator.generatePromptInstruction(testDescription, projectRoot, lastAnalysisResult, resolvedWrapper, baseUrl);
+                return { content: [{ type: "text", text: instruction }] };
             }
+            case "run_playwright_test": {
+                const { projectRoot, specificTestArgs, tags } = args;
+                await maintenance.ensureUpToDate(projectRoot);
+                const config = mcpConfig.read(projectRoot);
+                const grepArg = tags ? `--grep "${tags}"` : '';
+                const combinedArgs = [specificTestArgs, grepArg].filter(Boolean).join(' ');
+                const result = await runner.runTests(projectRoot, combinedArgs || undefined, config.testRunTimeout);
+                return { content: [{ type: "text", text: sanitizeOutput(result.output) }] };
+            }
+            case "summarize_suite": {
+                const { projectRoot } = args;
+                const report = suiteSummary.summarize(projectRoot);
+                return { content: [{ type: "text", text: report.plainEnglishSummary }] };
+            }
+            case "inspect_page_dom": {
+                const { url, waitForSelector, storageState, includeIframes, loginMacro } = args;
+                const domTree = await domInspector.inspect(url, waitForSelector, storageState, includeIframes, loginMacro);
+                return { content: [{ type: "text", text: domTree }] };
+            }
+            case "self_heal_test": {
+                const { testOutput, pageUrl } = args;
+                const analysis = selfHealer.analyzeFailure(testOutput);
+                let response = analysis.healInstruction;
+                if (analysis.canAutoHeal && pageUrl) {
+                    const liveDom = await domInspector.inspect(pageUrl);
+                    response += `\n\n--- LIVE DOM SNAPSHOT (use these selectors to fix locators) ---\n${liveDom}`;
+                }
+                return { content: [{ type: "text", text: sanitizeOutput(response) }] };
+            }
+            case "validate_and_write": {
+                const { projectRoot, files, pageUrl } = args;
+                const MAX_RETRIES = 3;
+                const currentAttempt = (retrySessionMap.get(projectRoot) ?? 0) + 1;
+                retrySessionMap.set(projectRoot, currentAttempt);
+                const writeResult = fileWriter.writeFiles(projectRoot, files);
+                // Phase 35b: Audit generated code for hardcoded secrets before running tests
+                const secretViolations = auditGeneratedCode(files);
+                if (secretViolations.length > 0) {
+                    const warningBlock = [
+                        `🔒 SECRET AUDIT: ${secretViolations.length} hardcoded credential(s) found in generated code!`,
+                        '',
+                        ...secretViolations,
+                        '',
+                        'The files were written but contain hardcoded secrets that should be replaced.',
+                        'Please regenerate these files using process.env variables or getUser() helpers instead.'
+                    ].join('\n');
+                    // Return the warning but DON'T block — let the LLM see the issue and fix it
+                    return {
+                        content: [{ type: "text", text: sanitizeOutput(warningBlock) }],
+                        isError: true
+                    };
+                }
+                const runConfig = mcpConfig.read(projectRoot);
+                const runResult = await runner.runTests(projectRoot, undefined, runConfig.testRunTimeout);
+                const lastOutput = runResult.output;
+                if (runResult.passed) {
+                    retrySessionMap.delete(projectRoot);
+                    return {
+                        content: [{
+                                type: "text",
+                                text: sanitizeOutput(`✅ SUCCESS on attempt ${currentAttempt}/${MAX_RETRIES}!\n\nAll tests passed. Files written and validated:\n${writeResult.written.map((f) => `  - ${f}`).join('\n')}`)
+                            }]
+                    };
+                }
+                const analysis = selfHealer.analyzeFailure(lastOutput);
+                if (!analysis.canAutoHeal) {
+                    retrySessionMap.delete(projectRoot);
+                    return { content: [{ type: "text", text: sanitizeOutput(`⚠️ AUTO-HEAL BLOCKED after attempt ${currentAttempt}/${MAX_RETRIES}\n\n${analysis.healInstruction}`) }] };
+                }
+                let healingContext = analysis.healInstruction;
+                if (pageUrl) {
+                    try {
+                        const dom = await domInspector.inspect(pageUrl);
+                        healingContext += `\n\n--- FRESH DOM SNAPSHOT (Attempt ${currentAttempt}) ---\n${dom}`;
+                    }
+                    catch (e) {
+                        healingContext += `\n\n[DOM re-inspection failed: ${e.message}]`;
+                    }
+                }
+                if (currentAttempt < MAX_RETRIES) {
+                    return { content: [{ type: "text", text: sanitizeOutput(`🔄 ATTEMPT ${currentAttempt}/${MAX_RETRIES} FAILED — SELF-HEALING ACTIVATED\n\n${healingContext}`) }] };
+                }
+                retrySessionMap.delete(projectRoot);
+                return { content: [{ type: "text", text: sanitizeOutput(`❌ ALL ${MAX_RETRIES} ATTEMPTS EXHAUSTED\n\n${selfHealer.analyzeFailure(lastOutput).healInstruction}`) }] };
+            }
+            case "setup_project": {
+                const { projectRoot } = args;
+                const result = await projectSetup.setup(projectRoot);
+                const cfg = mcpConfig.scaffold(projectRoot);
+                const userResults = userStore.scaffold(projectRoot, cfg.environments);
+                const envCount = Object.values(userResults).reduce((acc, r) => acc + r.added.length, 0);
+                const setupMsg = result.message +
+                    `\n\n✅ mcp-config.json scaffolded (edit to customise tags, browsers, timeouts, auth strategy)` +
+                    `\n✅ User stores created for environments: ${cfg.environments.join(', ')} (${envCount} roles each)` +
+                    `\n   Fill in passwords in test-data/users.{env}.json — those files are git-ignored for safety.`;
+                return { content: [{ type: "text", text: setupMsg }] };
+            }
+            case "manage_env": {
+                const { projectRoot, action, entries } = args;
+                if (action === "read") {
+                    const result = envManager.read(projectRoot);
+                    const summary = result.exists
+                        ? `Found .env at ${result.envFilePath} with ${result.keys.length} key(s):\n${result.keys.map((k) => `  - ${k}`).join('\n')}`
+                        : `No .env file found at ${result.envFilePath}. Run 'scaffold' to create one.`;
+                    return { content: [{ type: "text", text: summary }] };
+                }
+                if (action === "write") {
+                    if (!entries || !Array.isArray(entries)) {
+                        throw new Error("'write' action requires an 'entries' array of {key, value} objects.");
+                    }
+                    const result = envManager.write(projectRoot, entries);
+                    const lines = [
+                        `✅ .env updated at ${result.envFilePath}`,
+                        result.written.length > 0 ? `\nWritten:\n${result.written.map((k) => `  + ${k}`).join('\n')}` : '',
+                        result.skipped.length > 0 ? `\nSkipped (already set or secret placeholder):\n${result.skipped.map((k) => `  ~ ${k}`).join('\n')}` : '',
+                        `\n.env.example updated. Remember to commit .env.example but NOT .env.`,
+                    ];
+                    return { content: [{ type: "text", text: lines.filter(Boolean).join('') }] };
+                }
+                if (action === "scaffold") {
+                    const result = envManager.scaffold(projectRoot);
+                    return {
+                        content: [{
+                                type: "text",
+                                text: `✅ .env scaffolded at ${result.envFilePath}\n\nDefault keys written:\n${result.written.map((k) => `  + ${k}`).join('\n')}\n\nNext steps:\n  1. Open .env and replace \"***FILL_IN***\" values with real credentials.\n  2. Commit .env.example (already created) but never .env.\n  3. Use process.env.BASE_URL in your Page Objects to reference the base URL.`
+                            }]
+                    };
+                }
+                throw new Error(`Unknown manage_env action: ${action}. Valid values: read, write, scaffold`);
+            }
+            case "upgrade_project": {
+                const { projectRoot } = args;
+                const msgs = await maintenance.ensureUpToDate(projectRoot);
+                return { content: [{ type: "text", text: `🚀 Project upgraded!\n\n${msgs.join('\n')}` }] };
+            }
+            case "manage_config": {
+                const { projectRoot, action, config: configPatch } = args;
+                if (action === "read") {
+                    const current = mcpConfig.read(projectRoot);
+                    return { content: [{ type: "text", text: JSON.stringify(current, null, 2) }] };
+                }
+                if (action === "scaffold") {
+                    const written = mcpConfig.scaffold(projectRoot, configPatch ?? {});
+                    return {
+                        content: [{
+                                type: "text",
+                                text: `✅ mcp-config.json scaffolded at ${projectRoot}/mcp-config.json\n` +
+                                    `✅ mcp-config.example.json created (safe to commit).\n\n` +
+                                    `Current configuration:\n${JSON.stringify(written, null, 2)}`
+                            }]
+                    };
+                }
+                if (action === "write") {
+                    if (!configPatch)
+                        throw new Error("'write' action requires a 'config' object.");
+                    const updated = mcpConfig.write(projectRoot, configPatch);
+                    return { content: [{ type: "text", text: `✅ mcp-config.json updated.\n\n${JSON.stringify(updated, null, 2)}` }] };
+                }
+                throw new Error(`Unknown manage_config action: ${action}. Valid values: read, write, scaffold`);
+            }
+            case "manage_users": {
+                const { projectRoot, action, roles } = args;
+                const cfg = mcpConfig.read(projectRoot);
+                const env = args.environment ?? cfg.currentEnvironment;
+                if (action === "list") {
+                    const storeResult = userStore.read(projectRoot, env);
+                    if (!storeResult.exists) {
+                        return { content: [{ type: "text", text: `No user store found for environment "${env}". Run 'scaffold' first.` }] };
+                    }
+                    const listLines = [
+                        `👥 Users for environment: ${env} (${storeResult.filePath})`,
+                        `   Roles: ${storeResult.roles.join(', ')}`,
+                        '',
+                        ...storeResult.roles.map((role) => {
+                            const u = storeResult.users[role];
+                            const pwdStatus = u.password === '***FILL_IN***' ? '⚠️ NOT SET' : '✅ set';
+                            return `   • ${role}: ${u.username} — password: ${pwdStatus}`;
+                        })
+                    ];
+                    return { content: [{ type: "text", text: listLines.join('\n') }] };
+                }
+                if (action === "scaffold") {
+                    const results = userStore.scaffold(projectRoot, cfg.environments);
+                    const scaffoldLines = [`✅ User stores scaffolded for all environments: ${cfg.environments.join(', ')}`];
+                    for (const [e, r] of Object.entries(results)) {
+                        scaffoldLines.push(`   ${e}: added=${r.added.join(', ') || 'none'}, skipped=${r.skipped.join(', ') || 'none'}`);
+                    }
+                    scaffoldLines.push('', `📄 user-helper.ts generated in test-data/ — Page Objects can now call: getUser('admin')`);
+                    scaffoldLines.push(`⚠️  Fill in passwords in test-data/users.{env}.json — those files are already in .gitignore.`);
+                    return { content: [{ type: "text", text: scaffoldLines.join('\n') }] };
+                }
+                if (action === "add-role") {
+                    if (!roles || !Array.isArray(roles) || roles.length === 0) {
+                        throw new Error("'add-role' action requires a 'roles' array.");
+                    }
+                    const addResult = userStore.addRoles(projectRoot, env, roles);
+                    userStore.generateUserHelper(projectRoot, userStore.read(projectRoot, env).roles);
+                    const addLines = [
+                        `✅ Roles updated for environment: ${env}`,
+                        addResult.added.length > 0 ? `   Added: ${addResult.added.join(', ')}` : '',
+                        addResult.skipped.length > 0 ? `   Skipped (already exist): ${addResult.skipped.join(', ')}` : '',
+                        '',
+                        `⚠️  Open ${addResult.filePath} and replace ***FILL_IN*** values with real credentials.`,
+                    ].filter(Boolean);
+                    return { content: [{ type: "text", text: addLines.join('\n') }] };
+                }
+                throw new Error(`Unknown manage_users action: ${action}. Valid values: list, add-role, scaffold`);
+            }
+            default:
+                throw new Error(`Tool not found: ${name}`);
         }
-        // If retries remain, return fix instruction to LLM
-        if (currentAttempt < MAX_RETRIES) {
-            return {
-                content: [{
-                        type: "text",
-                        text: `🔄 ATTEMPT ${currentAttempt}/${MAX_RETRIES} FAILED — SELF-HEALING ACTIVATED\n\n${healingContext}\n\n⚡ ACTION REQUIRED: Fix the listed files and call validate_and_write again. You have ${MAX_RETRIES - currentAttempt} retries remaining.`
-                    }]
-            };
-        }
-        // Exhausted all retries — reset counter
-        retrySessionMap.delete(projectRoot);
+    }
+    catch (error) {
+        console.error(`Error in tool ${name}:`, error);
         return {
             content: [{
                     type: "text",
-                    text: `❌ ALL ${MAX_RETRIES} ATTEMPTS EXHAUSTED\n\nDespite ${MAX_RETRIES} self-healing attempts, the tests are still failing.\n\n${selfHealer.analyzeFailure(lastOutput).healInstruction}\n\n📋 WHAT TO DO NEXT:\n  1. Open test-results/ for Playwright's HTML report.\n  2. Review the failing Page Object files.\n  3. Use the inspect_page_dom tool on the live URL to get fresh locators.\n  4. If the application changed, update expected values in your .feature file.\n\n🙏 Don't worry — the BDD structure is correct. Only the indicated locators/assertions need attention.`
-                }]
+                    text: `❌ ERROR in tool "${name}": ${error.message}\n\nPlease check your inputs or try again.`
+                }],
+            isError: true
         };
     }
-    if (request.params.name === "setup_project") {
-        const { projectRoot } = request.params.arguments;
-        const result = await projectSetup.setup(projectRoot);
-        // Phase 23: also scaffold mcp-config.json and user stores
-        const cfg = mcpConfig.scaffold(projectRoot);
-        const userResults = userStore.scaffold(projectRoot, cfg.environments);
-        const envCount = Object.values(userResults).reduce((acc, r) => acc + r.added.length, 0);
-        const setupMsg = result.message +
-            `\n\n✅ mcp-config.json scaffolded (edit to customise tags, browsers, timeouts, auth strategy)` +
-            `\n✅ User stores created for environments: ${cfg.environments.join(', ')} (${envCount} roles each)` +
-            `\n   Fill in passwords in test-data/users.{env}.json — those files are git-ignored for safety.`;
-        return { content: [{ type: "text", text: setupMsg }] };
-    }
-    if (request.params.name === "manage_env") {
-        const { projectRoot, action, entries } = request.params.arguments;
-        if (action === "read") {
-            const result = envManager.read(projectRoot);
-            const summary = result.exists
-                ? `Found .env at ${result.envFilePath} with ${result.keys.length} key(s):\n${result.keys.map(k => `  - ${k}`).join('\n')}`
-                : `No .env file found at ${result.envFilePath}. Run 'scaffold' to create one.`;
-            return { content: [{ type: "text", text: summary }] };
-        }
-        if (action === "write") {
-            if (!entries || !Array.isArray(entries)) {
-                throw new Error("'write' action requires an 'entries' array of {key, value} objects.");
-            }
-            const result = envManager.write(projectRoot, entries);
-            const lines = [
-                `✅ .env updated at ${result.envFilePath}`,
-                result.written.length > 0 ? `\nWritten:\n${result.written.map((k) => `  + ${k}`).join('\n')}` : '',
-                result.skipped.length > 0 ? `\nSkipped (already set or secret placeholder):\n${result.skipped.map((k) => `  ~ ${k}`).join('\n')}` : '',
-                `\n.env.example updated. Remember to commit .env.example but NOT .env.`,
-            ];
-            return { content: [{ type: "text", text: lines.filter(Boolean).join('') }] };
-        }
-        if (action === "scaffold") {
-            const result = envManager.scaffold(projectRoot);
-            return {
-                content: [{
-                        type: "text",
-                        text: `✅ .env scaffolded at ${result.envFilePath}\n\nDefault keys written:\n${result.written.map((k) => `  + ${k}`).join('\n')}\n\nNext steps:\n  1. Open .env and replace \"***FILL_IN***\" values with real credentials.\n  2. Commit .env.example (already created) but never .env.\n  3. Use process.env.BASE_URL in your Page Objects to reference the base URL.`
-                    }]
-            };
-        }
-        throw new Error(`Unknown manage_env action: ${action}. Valid values: read, write, scaffold`);
-    }
-    if (request.params.name === "upgrade_project") {
-        const { projectRoot } = request.params.arguments;
-        const maintenanceResults = await maintenance.ensureUpToDate(projectRoot);
-        return {
-            content: [{
-                    type: "text",
-                    text: `🚀 Project upgraded successfully!\n\n${maintenanceResults.join('\n')}`
-                }]
-        };
-    }
-    if (request.params.name === "manage_config") {
-        const { projectRoot, action, config: configPatch } = request.params.arguments;
-        if (action === "read") {
-            const current = mcpConfig.read(projectRoot);
-            return { content: [{ type: "text", text: JSON.stringify(current, null, 2) }] };
-        }
-        if (action === "scaffold") {
-            const written = mcpConfig.scaffold(projectRoot, configPatch ?? {});
-            return {
-                content: [{
-                        type: "text", text: `✅ mcp-config.json scaffolded at ${projectRoot}/mcp-config.json\n` +
-                            `✅ mcp-config.example.json created (safe to commit).\n\n` +
-                            `Current configuration:\n${JSON.stringify(written, null, 2)}`
-                    }]
-            };
-        }
-        if (action === "write") {
-            if (!configPatch)
-                throw new Error("'write' action requires a 'config' object.");
-            const updated = mcpConfig.write(projectRoot, configPatch);
-            return { content: [{ type: "text", text: `✅ mcp-config.json updated.\n\n${JSON.stringify(updated, null, 2)}` }] };
-        }
-        throw new Error(`Unknown manage_config action: ${action}`);
-    }
-    if (request.params.name === "manage_users") {
-        const { projectRoot, action, roles } = request.params.arguments;
-        const cfg = mcpConfig.read(projectRoot);
-        const env = request.params.arguments.environment ?? cfg.currentEnvironment;
-        if (action === "list") {
-            const storeResult = userStore.read(projectRoot, env);
-            if (!storeResult.exists) {
-                return { content: [{ type: "text", text: `No user store found for environment "${env}". Run 'scaffold' first.` }] };
-            }
-            const listLines = [
-                `👥 Users for environment: ${env} (${storeResult.filePath})`,
-                `   Roles: ${storeResult.roles.join(', ')}`,
-                '',
-                ...storeResult.roles.map(role => {
-                    const u = storeResult.users[role];
-                    const pwdStatus = u.password === '***FILL_IN***' ? '⚠️ NOT SET' : '✅ set';
-                    return `   • ${role}: ${u.username} — password: ${pwdStatus}`;
-                })
-            ];
-            return { content: [{ type: "text", text: listLines.join('\n') }] };
-        }
-        if (action === "scaffold") {
-            const results = userStore.scaffold(projectRoot, cfg.environments);
-            const scaffoldLines = [`✅ User stores scaffolded for all environments: ${cfg.environments.join(', ')}`];
-            for (const [e, r] of Object.entries(results)) {
-                scaffoldLines.push(`   ${e}: added=${r.added.join(', ') || 'none'}, skipped=${r.skipped.join(', ') || 'none'}`);
-            }
-            scaffoldLines.push('', `📄 user-helper.ts generated in test-data/ — Page Objects can now call: getUser('admin')`);
-            scaffoldLines.push(`⚠️  Fill in passwords in test-data/users.{env}.json — those files are already in .gitignore.`);
-            return { content: [{ type: "text", text: scaffoldLines.join('\n') }] };
-        }
-        if (action === "add-role") {
-            if (!roles || !Array.isArray(roles) || roles.length === 0) {
-                throw new Error("'add-role' action requires a 'roles' array.");
-            }
-            const addResult = userStore.addRoles(projectRoot, env, roles);
-            userStore.generateUserHelper(projectRoot, userStore.read(projectRoot, env).roles);
-            const addLines = [
-                `✅ Roles updated for environment: ${env}`,
-                addResult.added.length > 0 ? `   Added: ${addResult.added.join(', ')}` : '',
-                addResult.skipped.length > 0 ? `   Skipped (already exist): ${addResult.skipped.join(', ')}` : '',
-                '',
-                `⚠️  Open ${addResult.filePath} and replace ***FILL_IN*** values with real credentials.`,
-            ].filter(Boolean);
-            return { content: [{ type: "text", text: addLines.join('\n') }] };
-        }
-        throw new Error(`Unknown manage_users action: ${action}`);
-    }
-    throw new Error(`Tool not found: ${request.params.name}`);
 });
 // CLI setup for Stdio vs SSE
 const program = new Command();

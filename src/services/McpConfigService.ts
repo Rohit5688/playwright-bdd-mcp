@@ -65,6 +65,13 @@ export interface McpConfig {
    * Defaults to 'networkidle' which works for most SPAs.
    */
   waitStrategy: 'networkidle' | 'domcontentloaded' | 'load';
+
+  /**
+   * Maximum time (in ms) for a single test run shell execution (npx bddgen && npx playwright test).
+   * If exceeded, the process is killed and a timeout error is returned.
+   * Defaults to 120000 (2 minutes). Increase for large test suites.
+   */
+  testRunTimeout: number;
 }
 
 export const DEFAULT_CONFIG: McpConfig = {
@@ -86,6 +93,7 @@ export const DEFAULT_CONFIG: McpConfig = {
   currentEnvironment: 'staging',
   environments: ['local', 'staging', 'prod'],
   waitStrategy: 'networkidle',
+  testRunTimeout: 120_000,
 };
 
 /**

@@ -206,21 +206,20 @@ export function getUser(role: UserRole): UserCredential {
 }
 `;
 
-    // Only write if it doesn't exist — don't overwrite user customizations
-    if (!fs.existsSync(helperPath)) {
-      fs.writeFileSync(helperPath, helperContent, 'utf-8');
-    }
+    // Always overwrite to ensure role types/imports stay in sync with latest project config
+    fs.writeFileSync(helperPath, helperContent, 'utf-8');
   }
 
   /** Keeps users.example.json in sync with all known roles (no credentials) */
   private updateExampleFile(testDataDir: string, users: UserStore): void {
-    const example: UserStore = {};
+    const example: Record<string, any> = {
+      _README: 'Copy this file to users.{env}.json and fill in real credentials. NEVER commit files with real passwords.'
+    };
     for (const [role, cred] of Object.entries(users)) {
       example[role] = { ...cred, password: 'FILL_IN' };
     }
     const examplePath = path.join(testDataDir, this.EXAMPLE_FILE);
-    const header = '// Copy this file to users.{env}.json and fill in real credentials.\n// NEVER commit files with real passwords.\n';
-    fs.writeFileSync(examplePath, header + JSON.stringify(example, null, 2), 'utf-8');
+    fs.writeFileSync(examplePath, JSON.stringify(example, null, 2), 'utf-8');
   }
 
   /** Adds users.{env}.json entries to .gitignore */

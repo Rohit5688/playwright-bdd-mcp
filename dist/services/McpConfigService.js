@@ -19,6 +19,7 @@ export const DEFAULT_CONFIG = {
     currentEnvironment: 'staging',
     environments: ['local', 'staging', 'prod'],
     waitStrategy: 'networkidle',
+    testRunTimeout: 120_000,
 };
 /**
  * McpConfigService — Phase 23

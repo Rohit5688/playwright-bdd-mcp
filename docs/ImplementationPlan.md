@@ -80,3 +80,54 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 3. **Consistency Check**: Interface vs. Service implementation alignment.
 4. **Tool Metadata**: Review descriptions and schemas for LLM context.
 5. **Node.js Standards**: JSDoc, modularity, and naming convention review.
+
+### Findings & Fixes Applied
+- **Critical**: Phase 33 switch-refactor accidentally stubbed `manage_config`, `manage_users`, `manage_env`, and `setup_project` handlers — restored full logic.
+- **Moderate**: `CodebaseAnalysisResult.mcpConfig` interface was incomplete — expanded with `backgroundBlockThreshold`, `waitStrategy`, `authStrategy`.
+- **Moderate**: Residual `any` casts in `TestGenerationService.ts` — removed by using the expanded interface.
+- **Moderate**: `lastAnalysisResult` typed as `any` — changed to `CodebaseAnalysisResult | null`.
+- **Minor**: `users.example.json` contained invalid JSON (JS comments) — fixed to use valid JSON with `_README` key.
+- **Minor**: `README.md` import path missing `.js` extension for ESM — fixed.
+
+---
+
+## Phase 34: VS Code Extension Integration
+
+**Objective**: Build a companion VS Code extension that provides a rich, AI-native UI for the MCP server, enabling seamless test generation, execution, and debugging directly from the IDE.
+
+**Proposed Changes**:
+1. **AI Assistant UI**: Implement a sidebar view with a chat-like interface for interacting with the MCP server.
+2. **Project Analysis**: Automatic background analysis of the Workspace using the `analyze_codebase` tool.
+3. **Smart Generation**: Context-aware Gherkin and POM generation with one-click "Apply" to the filesystem.
+4. **Live Execution**: Integration with the VS Code Test Controller for running BDD tests and visualizing results.
+5. **Self-Healing UI**: Interactive prompts for fixing failing tests via the `self_heal_test` logic.
+
+---
+
+## Phase 35: Security Hardening
+
+**Objective**: Add three defensive security layers to prevent credential leakage, path traversal attacks, and command injection — without breaking any existing tool functionality.
+
+**Changes Implemented**:
+1. **Response-Level Secret Redaction** (`src/utils/SecurityUtils.ts` → `sanitizeOutput`): Masks Bearer tokens, password values, and API keys in tool responses before they reach the LLM. Applied to `analyze_codebase`, `run_playwright_test`, `self_heal_test`, and `validate_and_write`.
+2. **Project Root Path Guard** (`SecurityUtils.ts` → `validateProjectPath`): Prevents `../` traversal and absolute path injection. Integrated into `FileWriterService.writeFiles()`.
+3. **Directory Allow-List** (`FileWriterService.ts`): LLM-generated files can only be written to `features/`, `step-definitions/`, `pages/`, `test-data/`, `fixtures/`, `models/`. Root-level config files are managed by their dedicated tools.
+4. **Shell Argument Sanitization** (`SecurityUtils.ts` → `sanitizeShellArg`): Strips dangerous metacharacters from `specificTestArgs` in `TestRunnerService`.
+5. **Generated Code Secret Audit** (`SecurityUtils.ts` → `auditGeneratedCode`): Proactively scans LLM-generated files for hardcoded passwords, tokens, API keys, and credential-embedded URLs before tests run. Returns violations with fix instructions.
+6. **Execution Timeout** (`TestRunnerService.ts`): Added a 2-minute per-run timeout to `execAsync` (now config-driven via `testRunTimeout`).
+
+---
+
+## Phase 36: Future Improvements (Backlog)
+
+**Objective**: Address long-term reliability, observability, and documentation enhancements based on recent recommendations.
+
+**To-Do Items**:
+1. **Security Smoke Tests**: Implement automated tests to verify path guards, shell sanitization, and response redaction.
+2. **Enhanced Codebase Analysis**: Add detection for duplicate step patterns, unused POM methods, and wrapper usage metrics.
+3. **Dry Run / Preview Mode**: Add `dryRun: true` parameter to writing tools to return proposed changes without modifying disk.
+4. **Expanded Documentation**:
+    - `docs/Security.md`: Detailed security architecture.
+    - `docs/McpConfig.md`: Full schema documentation.
+    - `docs/Workflows.md`: Example LLM conversation flows.
+    - Updated `DockerSetup.md` for remote SSE/HTTP modes.
