@@ -35,25 +35,25 @@ Detailed documentation, examples, and exact prompts to use with your AI client a
 ## 🛠️ MCP Tool Reference (Exposed Capabilities)
 
 ### **Project Setup & Maintenance**
-* \`setup_project\`: Bootstraps a scalable framework with hooks and standard structure.
-* \`upgrade_project\`: Updates an existing repository to latest core dependencies and migrates configurations.
-* \`manage_config\`: Reads/updates \`mcp-config.json\` capability builds and developer routing.
+* `setup_project`: Bootstraps a scalable framework with hooks and standard structure.
+* `upgrade_project`: Updates an existing repository to latest core dependencies and migrates configurations.
+* `manage_config`: Reads/updates `mcp-config.json` capability builds and developer routing.
 
 ### **Codebase Intelligence & Generation**
-* \`analyze_codebase\`: AST-based extraction of existing Steps, Pages, and Helpers.
-* \`generate_cucumber_pom\`: Heart of the machine. Generates the BDD suite instructions mapping English to POM code.
-* \`validate_and_write\`: Syntactically validates TypeScript and Gherkin before committing writes safely to disk.
-* \`migrate_test\`: Translates Selenium (Java/Python) into Playwright BDD TypeScript.
+* `analyze_codebase`: AST-based extraction of existing Steps, Pages, and Helpers.
+* `generate_cucumber_pom`: Heart of the machine. Generates the BDD suite instructions mapping English to POM code.
+* `validate_and_write`: Syntactically validates TypeScript and Gherkin before committing writes safely to disk.
+* `migrate_test`: Translates Selenium (Java/Python) into Playwright BDD TypeScript.
 
 ### **Execution & Healing**
-* \`inspect_page_dom\`: Fetches the live Accessibility Tree to find 100% accurate locator roles and names.
-* \`run_playwright_test\`: Executes native \`npx bddgen && npx playwright test\` and returns terminal logs.
-* \`self_heal_test\`: Feeds failures and live DOM context into the LLM to patch broken step definitions.
+* `inspect_page_dom`: Fetches the live Accessibility Tree to find 100% accurate locator roles and names.
+* `run_playwright_test`: Executes native `npx bddgen && npx playwright test` and returns terminal logs.
+* `self_heal_test`: Feeds failures and live DOM context into the LLM to patch broken step definitions.
 
 ### **Advanced Quality Assurance**
-* \`analyze_coverage\`: Reports on missing core functional flows and negative tests.
-* \`export_bug_report\`: Auto-classifies failures into Jira/Linear ready Markdown tickets with environment metadata.
-* \`suggest_refactorings\`: Flags unused POM methods and Duplicate Step Definitions.
+* `analyze_coverage`: Reports on missing core functional flows and negative tests.
+* `export_bug_report`: Auto-classifies failures into Jira/Linear ready Markdown tickets with environment metadata.
+* `suggest_refactorings`: Flags unused POM methods and Duplicate Step Definitions.
 
 ## Getting Started
 
