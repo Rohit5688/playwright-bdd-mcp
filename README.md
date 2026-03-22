@@ -32,7 +32,9 @@ Detailed documentation, examples, and exact prompts to use with your AI client a
 
 ## Getting Started
 
-To add this to your MCP-compatible client (e.g., Anthropic Desktop), add the following to your `claude_desktop_config.json`:
+### 🔌 Bootstrapping the Server
+
+Add the local server to your MCP Client settings:
 
 ```json
 {
@@ -44,6 +46,9 @@ To add this to your MCP-compatible client (e.g., Anthropic Desktop), add the fol
   }
 }
 ```
+
+> [!TIP]
+> This server also supports **SSE transport** via `--transport sse --port 3100`.
 
 Then, simply open a chat and say: *"I have a new automation project located at /path/to/my/project. Please set up Playwright-BDD for me."*
 
