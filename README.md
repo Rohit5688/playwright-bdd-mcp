@@ -1,4 +1,8 @@
-# Playwright-BDD Page Object Model MCP Server
+<p align="center">
+  <img src="docs/logo.png" width="400" alt="TestForge Logo">
+</p>
+
+# 🛠️ TestForge | Web Automation MCP Server
 
 An advanced, autonomous AI tool designed for Model Context Protocol (MCP) clients (like Cursor, Anthropic Desktop, etc.). This server provides an suite of highly specialized endpoints that transform your LLM into a Staff-Level QA Automation Engineer.
 
@@ -33,7 +37,7 @@ To add this to your MCP-compatible client (e.g., Anthropic Desktop), add the fol
 ```json
 {
   "mcpServers": {
-    "playwright-bdd": {
+    "testforge": {
       "command": "node",
       "args": ["/absolute/path/to/playwright-bdd-pom-mcp/build/index.js"]
     }
