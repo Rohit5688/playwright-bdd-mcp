@@ -1,4 +1,4 @@
-// Generated from: features\login.feature
+// Generated from: src\features\login.feature
 import { test } from "playwright-bdd";
 
 test.describe('User Login', () => {
@@ -15,7 +15,7 @@ test.describe('User Login', () => {
 
 test.use({
   $test: [({}, use) => use(test), { scope: 'test', box: true }],
-  $uri: [({}, use) => use('features\\login.feature'), { scope: 'test', box: true }],
+  $uri: [({}, use) => use('src\\features\\login.feature'), { scope: 'test', box: true }],
   $bddFileData: [({}, use) => use(bddFileData), { scope: "test", box: true }],
 });
 

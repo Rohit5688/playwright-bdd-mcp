@@ -1,4 +1,4 @@
-// Generated from: features\saucedemo.feature
+// Generated from: src\features\saucedemo.feature
 import { test } from "playwright-bdd";
 
 test.describe('Sauce Demo Shop', () => {
@@ -16,7 +16,7 @@ test.describe('Sauce Demo Shop', () => {
 
 test.use({
   $test: [({}, use) => use(test), { scope: 'test', box: true }],
-  $uri: [({}, use) => use('features\\saucedemo.feature'), { scope: 'test', box: true }],
+  $uri: [({}, use) => use('src\\features\\saucedemo.feature'), { scope: 'test', box: true }],
   $bddFileData: [({}, use) => use(bddFileData), { scope: "test", box: true }],
 });
 

@@ -6,12 +6,12 @@
     "strict": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "rootDir": "src",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "**/*.ts"
+    "src/**/*.ts",
+    "playwright.config.ts"
   ],
   "exclude": [
     "node_modules",
