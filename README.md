@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" width="400" alt="TestForge Logo">
+  <img src="docs/readme-logo.png" width="400" alt="TestForge Logo">
 </p>
 
 # 🛠️ TestForge | Web Automation MCP Server
