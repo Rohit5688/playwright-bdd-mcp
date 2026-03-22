@@ -1,0 +1,8 @@
+# Environment secrets
+.env.local
+
+# Environment secrets
+.env.staging
+
+# Environment secrets
+.env.prod
