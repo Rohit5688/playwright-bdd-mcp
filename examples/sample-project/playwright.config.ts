@@ -2,9 +2,9 @@ import 'dotenv/config';
 import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig } from 'playwright-bdd';
 const testDir = defineBddConfig({
-  featuresRoot: 'features',
-  features: '**/*.feature',
-  steps: 'step-definitions/**/*.ts',
+  featuresRoot: 'src/features',
+  features: 'src/features/**/*.feature',
+  steps: 'src/step-definitions/**/*.ts',
 });
 
 export default defineConfig({
