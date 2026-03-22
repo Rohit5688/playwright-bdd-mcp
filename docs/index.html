@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playwright-BDD MCP | Enterprise Automation Redefined</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Hero Section */
+        header {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: radial-gradient(circle at 50% 50%, #1e293b 0%, #0f172a 100%);
+            position: relative;
+        }
+
+        .hero-img {
+            max-width: 600px;
+            border-radius: 20px;
+            box-shadow: 0 0 50px var(--primary-glow);
+            margin-bottom: 3rem;
+            animation: fadeIn 1.5s ease-out;
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            max-width: 700px;
+            margin-bottom: 2rem;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        /* Features Section */
+        .features {
+            padding: 8rem 0;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 4rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--primary);
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #818cf8;
+        }
+
+        /* Code Section */
+        .code-section {
+            padding: 6rem 0;
+            background: #111827;
+        }
+
+        .code-block {
+            background: #000;
+            padding: 2rem;
+            border-radius: 12px;
+            font-family: 'Courier New', Courier, monospace;
+            color: #10b981;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #334155;
+        }
+
+        .code-block::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--primary);
+        }
+
+        footer {
+            padding: 4rem 0;
+            text-align: center;
+            color: var(--text-dim);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <img src="hero_visual.png" alt="MCP Hero" class="hero-img">
+            <h1>Playwright-BDD MCP</h1>
+            <p class="subtitle">The ultimate enterprise-grade automation companion. Bootstrap, Generate, and Self-Heal your BDD test suites with AI-driven precision.</p>
+            <div class="cta-group">
+                <a href="#features" class="btn btn-primary">Discover Features</a>
+                <a href="https://github.com/Rohit5688/playwright-bdd-mcp" class="btn" style="background: #334155; color: white;">View Repository</a>
+            </div>
+        </div>
+    </header>
+
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">Enterprise-Grade Performance</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>🤖 AI Self-Healing</h3>
+                    <p>Detects broken locators in real-time and automatically suggests or applies fixes by re-inspecting the DOM.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🏗️ Gold Standard POM</h3>
+                    <p>Generates clean, ESM-compliant Page Objects and Step Definitions following industry best practices.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔒 Security First</h3>
+                    <p>Includes built-in secret redaction and code-auditing to keep your credentials safe from leaked logs.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📊 Deep Analytics</h3>
+                    <p>Analyze coverage gaps, suggest refactorings, and export detailed bug reports directly to Jira.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ One-Command Setup</h3>
+                    <p>Bootstrap a full project including Playwright, TypeScript, and BDD configurations in under 30 seconds.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🌐 Multi-Layer Testing</h3>
+                    <p>Supports sophisticated web flows, AJAX interactions, nested IFrames, and advanced drag-and-drop scenarios.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="code-section">
+        <div class="container">
+            <h2 class="section-title" style="color: white;">Run it locally</h2>
+            <div class="code-block">
+                <p># Bootstrap your new project ✨</p>
+                <p>npx mcp-playwright-bdd setup ./my-test-app</p>
+                <br>
+                <p># Generate & Run Tests 🚀</p>
+                <p>cd ./my-test-app</p>
+                <p>npx bddgen</p>
+                <p>npx playwright test</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Playwright-BDD MCP. Built for the modern automation engineer.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
