@@ -1,8 +1,22 @@
-# Environment secrets
+# Environment
+.env
 .env.local
-
-# Environment secrets
 .env.staging
-
-# Environment secrets
 .env.prod
+
+# Dependencies
+node_modules/
+
+# Build and generate
+dist/
+.features-gen/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache
+
+# Other
+*.log
+.DS_Store
