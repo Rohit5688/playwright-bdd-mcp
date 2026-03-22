@@ -12,22 +12,22 @@ While `mcp-config.json` correctly added the `basePageClass` field to allow teams
 *   **Fallback Missing**: In `src/index.ts`, when `analyze_codebase` or `generate_gherkin_pom_test_suite` is called without a `customWrapperPackage` argument, the tool does *not* fall back to reading `config.basePageClass`.
 *   **Prompt Restriction**: In `TestGenerationService.ts`, Rules 7 and 11 strictly enforce the use of Playwright's native APIs (`await this.page.click()`, `expect().toBeVisible()`). Even if a custom wrapper is passed and its methods are introspected, the prompt's strictness prevents the LLM from reliably using the custom wrapper's methods for actions/assertions.
 
-**Proposed Solution:**
-*   Update `src/index.ts` to merge the tool argument with `config.basePageClass` before calling the analyzer/generator.
-*   Update `TestGenerationService.ts` to add a conditional rule: If a Custom Wrapper is detected, explicitly instruct the LLM to *prefer* the wrapper's methods for navigation, actions, and assertions over native Playwright APIs.
+**Proposed Solution (Implemented):**
+*   Update `src/index.ts` to merge the tool argument with `config.basePageClass` before calling the analyzer/generator. ✅
+*   Update `TestGenerationService.ts` to add a conditional rule: If a Custom Wrapper is detected, explicitly instruct the LLM to *prefer* the wrapper's methods for navigation, actions, and assertions over native Playwright APIs. ✅
 
 ### 2. Type Safety Bug in `user-helper.ts` Generation
 **Issue:**
 In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceService.ts` (`ensureUpToDate`), the `generateUserHelper` function is incorrectly passed `cfg.tags` instead of the actual user roles. 
 *   **Result**: The generated `test-data/user-helper.ts` file ends up with `export type UserRole = '@smoke' | '@regression';` instead of `export type UserRole = 'admin' | 'standard';`.
 
-**Proposed Solution:**
-*   Fix `ProjectMaintenanceService.ts:38` to read the actual roles from the user store (e.g., via `this.userStore.read(root, cfg.currentEnvironment)`) before regenerating the helper.
-*   Apply the identical fix to the CLI `upgrade` command in `src/index.ts:633`.
+**Proposed Solution (Implemented):**
+*   Fix `ProjectMaintenanceService.ts:38` to read the actual roles from the user store (e.g., via `this.userStore.read(root, cfg.currentEnvironment)`) before regenerating the helper. ✅
+*   Apply the identical fix to the CLI `upgrade` command in `src/index.ts:633`. ✅
 
 ---
 
-## Phase 29: Advanced Playwright Capabilities (Multi-tabs & APIs)
+## Phase 29: Advanced Playwright Capabilities (Multi-tabs & APIs) ✅ COMPLETED
 
 **Objective**: Equip the MCP AI with rules and patterns to natively handle multi-tab interactions, network interception, and mid-test HTTP client calls, accounting for enterprise edge-cases.
 
@@ -40,7 +40,7 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 
 ---
 
-## Phase 30: API Fixtures & Authentication Architecture
+## Phase 30: API Fixtures & Authentication Architecture ✅ COMPLETED
 
 **Objective**: Structure the project to support complex, multi-auth API testing by scaffolding a central `fixtures/` directory and explicitly teaching the AI how to parse them.
 
@@ -50,7 +50,7 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 
 ---
 
-## Phase 31: TypeScript DTOs & Models Architecture
+## Phase 31: TypeScript DTOs & Models Architecture ✅ COMPLETED
 
 **Objective**: Ability to natively generate and assert against strictly-typed DTOs for API payloads, replacing brittle `any` types.
 
@@ -60,7 +60,7 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 
 ---
 
-## Phase 32: Git Remote Setup & DTO Refinement for Interception
+## Phase 32: Git Remote Setup & DTO Refinement for Interception ✅ COMPLETED
 
 **Objective**: Establish a remote Git repository and refine DTO logic for response modification.
 
@@ -70,7 +70,7 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 
 ---
 
-## Phase 33: Comprehensive Code Review & Quality Audit
+## Phase 33: Comprehensive Code Review & Quality Audit ✅ COMPLETED
 
 **Objective**: Audit the entire MCP server codebase to identify bugs, architectural gaps, and ensure adherence to best practices.
 
@@ -104,7 +104,7 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 
 ---
 
-## Phase 35: Security Hardening
+## Phase 35: Security Hardening ✅ COMPLETED
 
 **Objective**: Add three defensive security layers to prevent credential leakage, path traversal attacks, and command injection — without breaking any existing tool functionality.
 
@@ -178,7 +178,7 @@ Review these specific changes to ensure the logic matches your team's expectatio
 
 ---
 
-## Phase 37: Resilience & Observability (Future Backlog)
+## Phase 37: Resilience & Observability ✅ COMPLETED
 
 **Objective**: Address long-term reliability, observability, and documentation enhancements based on recent recommendations.
 
@@ -199,7 +199,7 @@ Review these specific changes to ensure the logic matches your team's expectatio
 > [!IMPORTANT]
 > **Mandatory Prerequisite**: For every phase below, a "Logical Design Analysis" (LDA) must be performed and approved before any code changes. The LDA must evaluate architectural impact, backward compatibility, and credit efficiency.
 
-### Phase 38: Selenium → Playwright Migration Engine [/]
+### Phase 38: Selenium → Playwright Migration Engine ✅ COMPLETED
 **Priority**: ★★★★★ (High Impact / ROI)
 **Objective**: Build `migrate_from_selenium` tool to automate legacy suite modernization.
 
@@ -260,7 +260,7 @@ Legacy implementations vary dramatically in design architecture. The migration e
 *   **Vanilla JUnit / TestNG (Non-Cucumber)**: 
     If a legacy suite uses raw `@Test` annotations without Gherkin `.feature` files, the engine performs an **Inferred BDD Upgrade**. It analyzes the test method names, logic blocks, and assertions to auto-generate the missing `.feature` file (e.g., `Given/When/Then`) and maps the legacy code into modern `playwright-bdd` step definitions.
 
-### Phase 40: Maintenance & Developer Experience
+### Phase 40: Maintenance & Developer Experience ✅ COMPLETED
 **Priority**: ★★★★☆
 **Objective**: Keep the migrated codebase clean and data-driven.
 - **Key Features**: 
@@ -268,7 +268,7 @@ Legacy implementations vary dramatically in design architecture. The migration e
   - **Data Factories**: `generate_fixture` using faker-js for typed test data.
   - **Visual Regression**: Basic `toHaveScreenshot` integration and rebaselining tool.
 
-### Phase 41: Advanced Analytics & Optimization
+### Phase 41: Advanced Analytics & Optimization ✅ COMPLETED
 **Priority**: ★★★★☆
 **Objective**: Maximize efficiency and debugging speed.
 - **Key Features**:
@@ -277,7 +277,7 @@ Legacy implementations vary dramatically in design architecture. The migration e
 
 ### Phase 42: Automated Accessibility (a11y) Testing ✅ COMPLETED
 
-### Phase 43: Environment Isolation & Setup Verification
+### Phase 43: Environment Isolation & Setup Verification ✅ COMPLETED
 **Priority**: ★★★★★ (Critical for Reliability)
 **Objective**: Prevent common setup issues like "Playwright Test did not expect test.describe() to be called here" and configuration pitfalls.
 - **LDA Requirements**: Define a "Sanity Check" logic for `analyze_codebase` and `ProjectSetupService`.
@@ -287,7 +287,7 @@ Legacy implementations vary dramatically in design architecture. The migration e
     - Enforce `featuresRoot: 'features'` instead of glob patterns like `./features/*.feature` to prevent Playwright from accidentally scanning the generated `.features-gen` folder.
     - Ensure `testDir` is correctly isolated to `.features-gen`.
   - **Direct Execution Guidance**: The generator should explicitly provide the correct terminal commands (`npx bddgen && npx playwright test`) to ensure tests are run within the correct project context.
-  ### Phase 45: Interactive Clarification & User Feedback Loop
+  ### Phase 45: Interactive Clarification & User Feedback Loop ✅ COMPLETED
 **Priority**: ★★★★★ (Critical for Accuracy)
 **Objective**: Enable the MCP to pause and request user input when encountering ambiguity or low-confidence scenarios.
 - **LDA Requirements**: Define a "Clarification Protocol" for tool-triggered questions, UI/Response mapping for the host client (e.g. Cursor/Claude), and state preservation during waits.
@@ -298,7 +298,7 @@ Legacy implementations vary dramatically in design architecture. The migration e
   - **Ambiguity Gates**: Strategic pauses in `migrate_from_selenium` when multiple valid architectural choices (e.g. two conflicting base pages) are found.
   - **Pre-Scaffold Approval**: Presenting the "proposed configuration" to the user for final approval before `ProjectSetupService` writes it to disk.
 
-### Phase 46: Autonomous Learning & Persistent Knowledge Base
+### Phase 46: Autonomous Learning & Persistent Knowledge Base ✅ COMPLETED
 **Priority**: ★★★★★ (Strategic Efficiency)
 **Objective**: Build and refine a project-specific knowledge base to improve future accuracy and respect team-level coding styles.
 - **LDA Requirements**: Define the `knowledge/` / `mcp-learning.json` storage format, extraction heuristics (frequency thresholds), and human-in-the-loop validation hooks.
@@ -314,7 +314,7 @@ Legacy implementations vary dramatically in design architecture. The migration e
 #### 🛡️ 38.9: Shadow DOM & Piercing Locators
 *   **Piercing Strategy**: Automated conversion of Selenium's `executeScript` shadow-piercing hacks to Playwright's native `>>` or `locator().first()` syntax.
 
-### Phase 47: CI/CD Intelligence & Pipeline Auto-Generation
+### Phase 47: CI/CD Intelligence & Pipeline Auto-Generation ✅ COMPLETED
 **Priority**: ★★★★★ (Critical for Automation)
 **Objective**: Automate the creation of production-ready CI/CD pipelines.
 - **LDA Requirements**: Define YAML templates for GitHub Actions, Jenkins, and GitLab CI.
@@ -322,9 +322,36 @@ Legacy implementations vary dramatically in design architecture. The migration e
   - **Pipeline Scaffolding**: `generate_ci_pipeline` tool to create fully configured `.github/workflows` or `Jenkinsfile`.
   - **Cloud Grid Integration**: Auto-configuration for Playwright Cloud, BrowserStack, or SauceLabs within the pipeline.
 
-### Phase 48: Evidence Enrichment & Collaborative Knowledge
+### Phase 48: Evidence Enrichment & Collaborative Knowledge ✅ COMPLETED
 **Priority**: ★★★★☆
 **Objective**: Shared team-level intelligence and rich reporting.
 - **Features**:
   - **Jira Evidence Sync**: Auto-attach Playwright Videos and Traces (zip) to Jira/Xray issues on failure.
   - **Shared Knowledge Repo**: Implement a `knowledge/` directory in Git where the MCP stores team-trained patterns for all developers to share.
+
+---
+
+## Phase 49: Live Browser Sessions & Proactive Verification ✅ COMPLETED
+**Priority**: ★★★★★ (Critical for Daily AI Usability)
+**Objective**: Bridge the gap between static code generation and interactive, multi-step AI co-piloting by keeping browser state alive across tool calls.
+
+- **49.1: Persistent Browser Session Manager** (`PlaywrightSessionService`)
+  - Create tools: `start_session`, `end_session`, `navigate_session`.
+  - Maintains a persistent Playwright browser context in the background.
+  - Allows the AI to navigate to a page, inspect it, generate a step, click a button, and inspect the *next* page all in a single conversation context without launching a new browser every time.
+- **49.2: Proactive Selector Verification** (`verify_selector`)
+  - Create a lightweight tool to verify if a generated locator (e.g. `page.getByRole('button', { name: 'Submit' })`) resolves to a visible and enabled element *before* writing it to disk. 
+  - Substantially reduces the need for post-execution self-healing by catching bad selectors at generation time.
+
+---
+
+## Phase 50: Exposing Existing Enterprise Polish Tools ✅ COMPLETED
+**Priority**: ★★★☆☆ (Medium - High Polish)
+**Objective**: The project currently contains unimplemented or unregistered enterprise services (`RefactoringService`, `AnalyticsService`, `SeleniumMigrationService`, `FixtureDataService`). These must be wired up to `index.ts` and formally documented.
+
+- **50.1: Feature Registration & UI Bridge**
+  - **Coverage Analysis**: Register `analyze_coverage` (via `AnalyticsService` / `SuiteSummaryService`) to pinpoint missing scenarios and generate test heatmaps.
+  - **Refactoring Suggestions**: Register `suggest_refactorings` (via `RefactoringService`) to detect unused POM methods, duplicate step logic, and suggest cleanups.
+  - **Test Migration**: Register `migrate_test` (via `SeleniumMigrationService`) to convert Cypress/Selenium legacy tests.
+  - **Test Data Factories**: Register `generate_test_data_factory` (via `FixtureDataService`) to output type-safe faker.js models.
+  - **Bug Export**: Register `export_bug_report` to format failure data into Jira/Linear ready markdown tickets.

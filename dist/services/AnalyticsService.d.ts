@@ -8,5 +8,9 @@ export declare class AnalyticsService {
      * instructing the LLM to write missing test vectors.
      */
     analyzeCoverageGaps(projectRoot: string): string;
+    /**
+     * Generates a bug report for Jira/Linear export.
+     */
+    generateJiraBugPrompt(testName: string, rawError: string): string;
 }
 //# sourceMappingURL=AnalyticsService.d.ts.map

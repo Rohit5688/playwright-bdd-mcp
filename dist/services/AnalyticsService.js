@@ -54,5 +54,29 @@ ${coverageData}
 Return your response formatted in Markdown, putting the proposed Scenarios in code blocks.
 `;
     }
+    /**
+     * Generates a bug report for Jira/Linear export.
+     */
+    generateJiraBugPrompt(testName, rawError) {
+        return `
+You are an expert QA Automation Engineer.
+Your task is to convert the following Playwright test failure into a professional, correctly formatted Jira/Linear bug report in Markdown.
+
+### 🛑 CRITICAL INSTRUCTIONS
+1. **Title**: Write a clear, concise bug title.
+2. **Environment**: Put placeholders for Environment, Browser, and OS.
+3. **Steps to Reproduce**: Infer the steps leading up to the failure from the test name and error stack trace.
+4. **Expected vs Actual**: Clearly state what happened vs what should have happened.
+5. **Logs/Traces**: Include a placeholder stating "Attached Playwright Trace (.zip) and Video".
+6. **Error Stack**: Include the relevant portion of the error in a code block.
+
+### 🚨 FAILED TEST: ${testName}
+\`\`\`
+${rawError}
+\`\`\`
+
+Return ONLY the Markdown bug report ticket.
+`;
+    }
 }
 //# sourceMappingURL=AnalyticsService.js.map

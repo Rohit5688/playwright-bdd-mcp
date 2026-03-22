@@ -24,6 +24,7 @@ import { FixtureDataService } from "./services/FixtureDataService.js";
 import { AnalyticsService } from "./services/AnalyticsService.js";
 import { LearningService } from "./services/LearningService.js";
 import { PipelineService } from "./services/PipelineService.js";
+import { PlaywrightSessionService } from "./services/PlaywrightSessionService.js";
 import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
 // SOLID: Dependency Injection Root
 const analyzer = new CodebaseAnalyzerService();
@@ -44,6 +45,7 @@ const fixtureDataService = new FixtureDataService();
 const analyticsService = new AnalyticsService();
 const learningService = new LearningService();
 const pipelineService = new PipelineService();
+const sessionService = new PlaywrightSessionService();
 const server = new Server({
     name: "playwright-bdd-pom-mcp",
     version: "1.0.0",
@@ -360,6 +362,58 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                         projectRoot: { type: "string" }
                     },
                     required: ["projectRoot"]
+                }
+            },
+            {
+                name: "analyze_coverage_gaps",
+                description: "Analyzes istanbul/v8 LCOV coverage metrics to identify deeply untested branches, returning strict LLM instructions to generate the missing Playwright-BDD features.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectRoot: { type: "string" }
+                    },
+                    required: ["projectRoot"]
+                }
+            },
+            {
+                name: "start_session",
+                description: "Starts a persistent Playwright browser session in the background. Call this at the start of interactive or multi-step tasks to avoid launching a new browser per action.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        headless: { type: "boolean", description: "Whether to hide the browser UI. Default: true (headless)." },
+                        storageState: { type: "string", description: "Path to a storageState JSON (cookies/auth)." }
+                    }
+                }
+            },
+            {
+                name: "end_session",
+                description: "Ends the persistent Playwright browser session.",
+                inputSchema: {
+                    type: "object",
+                    properties: {}
+                }
+            },
+            {
+                name: "navigate_session",
+                description: "Navigates the persistent session to a target URL.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        url: { type: "string", description: "The URL to navigate to." }
+                    },
+                    required: ["url"]
+                }
+            },
+            {
+                name: "verify_selector",
+                description: "TESTS a CSS/XPath selector LIVE in the persistent browser without running a full script. Use this to proactively guarantee your generated locators are valid, visible, and enabled before saving them to a Page Object.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        selector: { type: "string", description: "The raw generic selector (e.g. '.submit-btn' or '//button')." }
+                    },
+                    required: ["selector"]
                 }
             }
         ],
@@ -685,6 +739,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return {
                     content: [{ type: "text", text: systemPrompt }]
                 };
+            }
+            case "export_jira_bug": {
+                const { testName, rawError } = args;
+                const bugReport = analyticsService.generateJiraBugPrompt(testName, rawError);
+                return {
+                    content: [{ type: "text", text: bugReport }]
+                };
+            }
+            case "start_session": {
+                const result = await sessionService.startSession(args);
+                return { content: [{ type: "text", text: result }] };
+            }
+            case "end_session": {
+                const result = await sessionService.endSession();
+                return { content: [{ type: "text", text: result }] };
+            }
+            case "navigate_session": {
+                const { url } = args;
+                const result = await sessionService.navigate(url);
+                return { content: [{ type: "text", text: result }] };
+            }
+            case "verify_selector": {
+                const { selector } = args;
+                const result = await sessionService.verifySelector(selector);
+                return { content: [{ type: "text", text: result }] };
             }
             case "request_user_clarification": {
                 const { question, options, context } = args;
