@@ -153,28 +153,51 @@
 
         .feature-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
         .feature-card {
             background: var(--card-bg);
             padding: 2.5rem;
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            transition: transform 0.3s;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+            text-align: left;
+            box-shadow: var(--shadow);
         }
 
         .feature-card:hover {
-            transform: translateY(-10px);
+            transform: translateY(-5px);
             border-color: var(--primary);
         }
 
-        .feature-card h3 {
+        .feature-icon {
+            font-size: 2.5rem;
+            line-height: 1;
+            flex-shrink: 0;
+            color: var(--primary);
+        }
+
+        .feature-icon svg {
+            width: 40px;
+            height: 40px;
+            stroke-width: 2.5;
+            stroke: currentColor;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .feature-content h3 {
             font-size: 1.5rem;
-            margin-bottom: 1rem;
-            color: #22d3ee;
+            margin-bottom: 0.75rem;
+            color: var(--primary);
         }
 
         /* Code Section */
@@ -244,40 +267,46 @@
             <h2 class="section-title">Built for the Modern Automation Stack</h2>
             <div class="feature-grid">
                 <div class="feature-card">
-                    <h3>🤖 AI-Powered Self-Healing</h3>
-                    <p>Stop fixing brittle tests manually. Our engine detects broken locators in real-time and automatically applies fixes by re-inspecting the active DOM during execution.</p>
+                    <div class="feature-icon">🤖</div>
+                    <div class="feature-content">
+                        <h3>AI-Powered Self-Healing</h3>
+                        <p>Real-time locator repair during execution using intelligent DOM analysis. Never let your CI fail due to minor UI changes again.</p>
+                    </div>
                 </div>
                 <div class="feature-card">
-                    <h3>🏗️ Enterprise Page Object Model</h3>
-                    <p>Scaffold clean, ESM-compliant Page Objects and Step Definitions. We enforce strict TypeScript typing and industry-standard patterns for maximum maintainability.</p>
+                    <div class="feature-icon">🏢</div>
+                    <div class="feature-content">
+                        <h3>Enterprise User Store</h3>
+                        <p>Manage credentials for Staging and Production with secure, type-safe helpers. Seamlessly switch environments with a single flag.</p>
+                    </div>
                 </div>
                 <div class="feature-card">
-                    <h3>🔒 Security & Secret Redaction</h3>
-                    <p>Built-in integration with <code>dotenv</code> and automated secret masking. Your passwords and API keys stay out of your logs and GitHub repositories.</p>
+                    <div class="feature-icon">🕵️</div>
+                    <div class="feature-content">
+                        <h3>API Interception</h3>
+                        <p>Assert directly against backend data. Mock responses and intercept calls to test complex edge cases without touching the database.</p>
+                    </div>
                 </div>
                 <div class="feature-card">
-                    <h3>👥 Multi-Environment User Store</h3>
-                    <p>Manage test credentials across <code>local</code>, <code>staging</code>, and <code>prod</code> effortlessly. Automatically generates type-safe <code>user-helper.ts</code> for your IDE.</p>
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-content">
+                        <h3>Visual DOM Inspection</h3>
+                        <p>Extract precise locators directly from the Accessibility Tree. 100% accuracy for Screen Readers and standard automation alike.</p>
+                    </div>
                 </div>
                 <div class="feature-card">
-                    <h3>🚀 60-Second Bootstrap</h3>
-                    <p>Go from zero to a passing BDD suite in under a minute. Our setup tool handles folders, dependencies, and complex Playwright/BDD configurations automatically.</p>
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-content">
+                        <h3>TypeScript DTO Gen</h3>
+                        <p>Automatically generate TypeScript interfaces from your API responses. Ensure full type-safety across your entire automation stack.</p>
+                    </div>
                 </div>
                 <div class="feature-card">
-                    <h3>👁️ Visual DOM Inspection</h3>
-                    <p>Extract 100% accurate locators directly from the Accessibility Tree. No more inspecting HTML manually—get semantic roles and names instantly.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>🖱️ Advanced Interactions</h3>
-                    <p>Native support for complex flows: Drag & Drop, nested Iframes, multi-tab switching, and sophisticated AJAX interaction patterns.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>📡 API Interception & Mocking</h3>
-                    <p>Intercept and mock API calls with custom payloads. Capture real-time responses and assert against backend data directly within your Gherkin steps.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>📈 Integrated Analytics & DTOs</h3>
-                    <p>Automatically generate TypeScript DTOs from API responses for type-safe assertions. Identify coverage gaps and export reports to Jira seamlessly.</p>
+                    <div class="feature-icon">🛡️</div>
+                    <div class="feature-content">
+                        <h3>Security & Analytics</h3>
+                        <p>Integrated coverage analysis and security audits for your test suites. Know exactly what you are testing and how protected you are.</p>
+                    </div>
                 </div>
             </div>
         </div>
