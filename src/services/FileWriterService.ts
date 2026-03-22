@@ -61,7 +61,7 @@ export class FileWriterService {
    *
    * Returns the list of absolute paths written, plus any warnings.
    */
-  public writeFiles(projectRoot: string, files: GeneratedFile[]): { written: string[]; warnings: string[] } {
+  public writeFiles(projectRoot: string, files: GeneratedFile[], dryRun: boolean = false): { written: string[]; warnings: string[] } {
     const written: string[] = [];
     const warnings: string[] = [];
     const manifest = this.loadManifest(projectRoot);
@@ -71,8 +71,9 @@ export class FileWriterService {
       let absolutePath: string;
       try {
         absolutePath = validateProjectPath(projectRoot, file.path);
-      } catch (e: any) {
-        warnings.push(`⛔ BLOCKED: "${file.path}" — ${e.message}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        warnings.push(`⛔ BLOCKED: "${file.path}" — ${msg}`);
         continue;
       }
 
@@ -101,12 +102,16 @@ export class FileWriterService {
         }
       }
 
-      fs.writeFileSync(absolutePath, file.content, 'utf-8');
-      manifest[file.path] = { hash: this.sha256(file.content) };
+      if (!dryRun) {
+        fs.writeFileSync(absolutePath, file.content, 'utf-8');
+        manifest[file.path] = { hash: this.sha256(file.content) };
+      }
       written.push(absolutePath);
     }
 
-    this.saveManifest(projectRoot, manifest);
+    if (!dryRun) {
+      this.saveManifest(projectRoot, manifest);
+    }
     return { written, warnings };
   }
 }

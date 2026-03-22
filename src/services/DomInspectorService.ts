@@ -9,7 +9,7 @@ export class DomInspectorService implements IDomInspector {
     try {
       browser = await chromium.launch({ headless: true });
       
-      const contextArgs: any = {};
+      const contextArgs: { storageState?: string } = {};
       if (storageState) {
         contextArgs.storageState = storageState;
       }
@@ -36,7 +36,7 @@ export class DomInspectorService implements IDomInspector {
       // --- 18A FIX: Null-safe AOM snapshot with semantic DOM fallback ---
       // page.accessibility.snapshot() can return null on pages where the AOM tree
       // is unavailable (CSP-blocked, purely iframe-based, or accessibility-disabled pages).
-      let mainSnapshot: any = null;
+      let mainSnapshot: unknown = null;
       try {
         mainSnapshot = await (page as any).accessibility?.snapshot?.() ?? null;
       } catch {
@@ -62,7 +62,7 @@ export class DomInspectorService implements IDomInspector {
         });
       }
       
-      const result: any = { mainFrame: mainSnapshot };
+      const result: { mainFrame: unknown; iframes?: { url: string; snapshot: unknown }[] } = { mainFrame: mainSnapshot };
 
       // Optional recursive pass for inner frames (like Stripe fields or generic embedded sites)
       if (includeIframes) {
@@ -80,9 +80,9 @@ export class DomInspectorService implements IDomInspector {
 
       return JSON.stringify(result, null, 2);
 
-    } catch (error: any) {
+    } catch (error) {
       // --- 18A FIX: Friendly, actionable error messages ---
-      const msg: string = error?.message ?? String(error);
+      const msg: string = error instanceof Error ? error.message : String(error);
       if (msg.includes('ECONNREFUSED') || msg.includes('ERR_CONNECTION_REFUSED')) {
         return `[ERROR] Could not reach "${url}". Is the server running and accessible from this machine?`;
       }

@@ -1,19 +1,8 @@
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import type { ITestGenerator, GeneratedFile, TestGenerationResult } from '../interfaces/ITestGenerator.js';
 import type { CodebaseAnalysisResult } from '../interfaces/ICodebaseAnalyzer.js';
 
-/**
- * TestGenerationService — Phases 23–31
- *
- * Builds a comprehensive LLM system instruction that governs how the client AI
- * generates Playwright-BDD test suites (Gherkin + Page Objects + Step Definitions).
- *
- * Key responsibilities:
- *  - Injects project context (existing POMs, steps, naming conventions)
- *  - Enforces 19 mandatory rules covering SOLID patterns, API interception,
- *    multi-tab handling, auth fixtures, TypeScript DTOs, and more
- *  - Reads team preferences from mcp-config.json (tags, wait strategy, auth)
- *  - Outputs a structured JSON schema the AI must follow
- */
 export class TestGenerationService implements ITestGenerator {
   
   public async generatePromptInstruction(
@@ -21,7 +10,8 @@ export class TestGenerationService implements ITestGenerator {
     projectRoot: string,
     analysisResult: CodebaseAnalysisResult,
     customWrapperPackage?: string,
-    baseUrl?: string
+    baseUrl?: string,
+    memoryPrompt: string = ""
   ): Promise<string> {
     
     // --- Phase 23: Extract team preferences from mcp-config.json if present ---
@@ -30,14 +20,27 @@ export class TestGenerationService implements ITestGenerator {
     const bgThreshold: number = cfg?.backgroundBlockThreshold ?? 3;
     const waitStrategy: string = cfg?.waitStrategy ?? 'networkidle';
     const authStrategy: string = cfg?.authStrategy ?? 'users-json';
-    const userRoles = analysisResult.userRoles;
+    const archNotesPath: string = (cfg as any)?.architectureNotesPath ?? 'docs/mcp-architecture-notes.md';
 
-    // Build env context from analysis result if present
-    const envContext = analysisResult.envConfig?.keys?.length
-      ? `\n--- Available .env Variables (use process.env.KEY, never hardcode) ---\n${(analysisResult.envConfig.keys as string[]).map((k: string) => `- ${k}`).join('\n')}`
-      : '';
+    // Item 11: Read Architecture Notes if exists
+    let archNotes = '';
+    try {
+      const fullPath = path.resolve(projectRoot, archNotesPath);
+      archNotes = await fs.readFile(fullPath, 'utf8');
+    } catch (e) {
+      // It is perfectly normal if architecture notes do not exist
+    }
+
+    // Item 3: Build env context from analysis result if present
+    let envContext = '';
+    if (analysisResult.envConfig?.present) {
+      envContext = `\n--- Environment Configuration (Item 3: REUSE THESE) ---\n` +
+        `Existing Files: ${analysisResult.envConfig.files.join(', ')}\n` +
+        `Detected Keys: ${analysisResult.envConfig.keys.join(', ') || 'N/A'}`;
+    }
 
     // Build user context when users-json auth is configured
+    const userRoles = analysisResult.userRoles;
     const userContext = (authStrategy === 'users-json' && userRoles && userRoles.roles.length > 0)
       ? `\n--- Multi-User Credential Store (users-json strategy, env: ${userRoles.environment}) ---\n` +
         `Available roles: ${userRoles.roles.join(', ')}\n` +
@@ -57,8 +60,8 @@ export class TestGenerationService implements ITestGenerator {
       ...(analysisResult.existingPageObjects.map(p => `${p.path} -> Methods: ${p.publicMethods.join(', ')}`)),
       ...(analysisResult.customWrapper ? [
         `Custom Wrapper (${analysisResult.customWrapper.package}): ${analysisResult.customWrapper.isInstalled ? analysisResult.customWrapper.detectedMethods.join(', ') : 'Not Installed/Resolved'}`,
-        ...(analysisResult.customWrapper.resolutionError ? [analysisResult.customWrapper.resolutionError] : [])
-      ] : [])
+      ] : []),
+      archNotes ? `\n--- ARCHITECTURE NOTES (Item 11: FOLLOW THESE) ---\n${archNotes}` : ''
     ];
 
     let instructContent = `[SYSTEM INSTRUCTION: MCP TEST GENERATION]
@@ -75,6 +78,9 @@ ${userContext}
 
 Existing Page Objects and Methods available for reuse:
 ${reusedContext.join('\n')}
+
+--- EXISTING TEST DATA STRUCTURES (Rule 26: REUSE THESE) ---
+${analysisResult.existingTestData ? [...analysisResult.existingTestData.payloads, ...analysisResult.existingTestData.fixtures].map(d => `${d.path}: ${d.sampledStructure}`).join('\n') : 'None discovered.'}
 
 --- MANDATORY REQUIREMENTS (SOLID & BDD PATTERNS) ---
 1. You MUST output a structured JSON response EXACTLY matching the formatting requested below. Do NOT wrap the JSON in markdown code blocks, or if you do, ensure the JSON is perfectly valid.
@@ -106,6 +112,16 @@ ${reusedContext.join('\n')}
     - **Assertions**: Import and cast responses to the Interface for type-safe compile-time assertions.
     - **Modification**: Use the Interface to construct or modify JSON bodies before fulfilling a routed request (e.g., \`route.fulfill({ body: JSON.stringify(modifiedObj) })\`).
     - **Reuse**: Encapsulate complex validation logic or payload generation within these model types.
+20. Step-Level Context & Fixtures: You MUST use the native Playwright-BDD destructuring (\`async ({ page, myPage }) => { ... }\`) within EVERY step definition. NEVER store the \`page\` object in a module-level variable or class constructor that persists across steps. This ensures strict state isolation and reliable parallel execution.
+21. Spec File Guard: You are EXPLICITLY FORBIDDEN from generating or modifying any \`.spec.ts\` files (e.g., those in \`.features-gen/\`). These files are managed by the \`npx bddgen\` command. Only modify features, steps, and Page Objects.
+22. Advanced Page Stability: Before taking any screenshot (\`takeScreenshot\`) or performing an action after a tab switch/navigation, you MUST inject logic to verify the page is fully loaded and "stable" (e.g., checking for the absence of loading spinners or waiting for a specific anchor element).
+23. Ad & Popup Interception: If the test description implies a public-facing site known for intrusive ads/popups, you MUST include a "Setup" block or a shared utility method in your Page Objects to identify and close common overlays (e.g., \`this.header.closePopup()\`) before proceeding with the main flow.
+24. Intelligent Feature Merging: If you are asked to create a scenario that logically belongs to an existing feature file (see context for \`Existing Features\`), you MUST return the content of the existing file with the NEW scenario appended to the end, rather than creating a duplicate \`new-feature-2.feature\` file. Do NOT delete existing scenarios.
+25. POM Enforcement for Wrappers: Even if a Custom Wrapper provides high-level actions (like \`BasePage.clickButton()\`), you MUST still generate a project-specific Page Object class (e.g., \`pages/LoginPage.ts\` extending \`BasePage\`) and encapsulate the UI logic in specific methods (e.g., \`submitLogin()\`). Step definitions MUST NEVER instantiate and call the wrapper class directly (to prevent "direct-to-wrapper" anti-pattern).
+26. Test Data Reuse Excellence: You MUST prioritize reusing the existing test data structures provided in context. If a similar data shape exists, use it via \`fs.readFileSync\` or dynamic imports instead of generating new mock JSON files or interfaces.
+27. Automated Accessibility: If the user description mentions "accessibility", "WCAG", "a11y", or "compliance", or if it's a critical page transition, you MUST include a \`Then I check accessibility of the page\` step. This maps to \`await pageObject.checkAccessibility()\` which is inherited from \`BasePage\`.
+
+${memoryPrompt}
 
 --- PLAYWRIGHT-BDD SPECIFIC RULES ---
 - Step definitions MUST be defined using \`playwright-bdd\`, not standard Cucumber:

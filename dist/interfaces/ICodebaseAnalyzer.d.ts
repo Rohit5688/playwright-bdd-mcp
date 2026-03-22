@@ -17,6 +17,7 @@ export interface CodebaseAnalysisResult {
         detectedMethods: string[];
         isInstalled?: boolean;
         resolutionError?: string;
+        architectureNotesPath?: string;
     };
     namingConventions: {
         features: string;
@@ -36,8 +37,31 @@ export interface CodebaseAnalysisResult {
         helperImport: string;
     };
     envConfig?: {
+        present: boolean;
+        files: string[];
         keys: string[];
     };
+    npmScripts?: Record<string, string>;
+    existingTestData?: {
+        payloads: Array<{
+            path: string;
+            sampledStructure?: string;
+        }>;
+        fixtures: Array<{
+            path: string;
+            sampledStructure?: string;
+        }>;
+    };
+    duplicateSteps?: Array<{
+        step: string;
+        files: string[];
+    }>;
+    unusedPomMethods?: Array<{
+        path: string;
+        unusedMethods: string[];
+    }>;
+    duplicateInstallWarnings?: string[];
+    mcpLearnDirectives?: string[];
     recommendation: string;
 }
 export interface ICodebaseAnalyzer {

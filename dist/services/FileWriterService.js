@@ -48,7 +48,7 @@ export class FileWriterService {
      *
      * Returns the list of absolute paths written, plus any warnings.
      */
-    writeFiles(projectRoot, files) {
+    writeFiles(projectRoot, files, dryRun = false) {
         const written = [];
         const warnings = [];
         const manifest = this.loadManifest(projectRoot);
@@ -59,7 +59,8 @@ export class FileWriterService {
                 absolutePath = validateProjectPath(projectRoot, file.path);
             }
             catch (e) {
-                warnings.push(`⛔ BLOCKED: "${file.path}" — ${e.message}`);
+                const msg = e instanceof Error ? e.message : String(e);
+                warnings.push(`⛔ BLOCKED: "${file.path}" — ${msg}`);
                 continue;
             }
             // Phase 35: Directory allow-list enforcement
@@ -82,11 +83,15 @@ export class FileWriterService {
                     warnings.push(`⚠️  "${file.path}" was manually modified since last MCP write. Overwriting with new generated version.`);
                 }
             }
-            fs.writeFileSync(absolutePath, file.content, 'utf-8');
-            manifest[file.path] = { hash: this.sha256(file.content) };
+            if (!dryRun) {
+                fs.writeFileSync(absolutePath, file.content, 'utf-8');
+                manifest[file.path] = { hash: this.sha256(file.content) };
+            }
             written.push(absolutePath);
         }
-        this.saveManifest(projectRoot, manifest);
+        if (!dryRun) {
+            this.saveManifest(projectRoot, manifest);
+        }
         return { written, warnings };
     }
 }

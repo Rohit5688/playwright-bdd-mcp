@@ -24,6 +24,16 @@ export class SelfHealingService {
         /SyntaxError/i,
     ];
     /**
+     * Item 13: Patterns for ads, popups or overlays blocking the UI.
+     * Playwright often throws "click intercepted" errors for these.
+     */
+    AD_INTERCEPTED_PATTERNS = [
+        /click intercepted/i,
+        /is being covered by another element/i,
+        /element is not clickable at point/i,
+        /pointer-events: none/i,
+    ];
+    /**
      * Synchronization failures: the locator resolved and the action completed,
      * but the DOM state was read before the UI could reflect the change.
      * Classic causes: rich text editor iframes, debounced state updates, React re-renders.
@@ -45,16 +55,21 @@ export class SelfHealingService {
         /toHaveURL.*failed/i,
         /AssertionError/i,
     ];
-    analyzeFailure(testOutput) {
+    analyzeFailure(testOutput, memoryPrompt = '') {
         const kind = this.classifyFailure(testOutput);
         const failedLocators = this.extractFailedLocators(testOutput);
         const failedFiles = this.extractFailedFiles(testOutput);
         const failedLines = this.extractFailedLines(testOutput);
-        const canAutoHeal = kind === 'SCRIPTING_FAILURE' || kind === 'SYNCHRONIZATION_FAILURE';
-        const healInstruction = this.buildHealInstruction(kind, failedLocators, failedFiles, failedLines, testOutput);
+        const canAutoHeal = kind === 'SCRIPTING_FAILURE' || kind === 'SYNCHRONIZATION_FAILURE' || kind === 'AD_INTERCEPTED_FAILURE';
+        const healInstruction = this.buildHealInstruction(kind, failedLocators, failedFiles, failedLines, testOutput, memoryPrompt);
         return { kind, canAutoHeal, failedLocators, failedFiles, failedLines, rawError: testOutput, healInstruction };
     }
     classifyFailure(output) {
+        // Check AD INTERCEPTION first as it's a specific blocker
+        for (const pattern of this.AD_INTERCEPTED_PATTERNS) {
+            if (pattern.test(output))
+                return 'AD_INTERCEPTED_FAILURE';
+        }
         // Check synchronization FIRST because it can co-occur with toContainText patterns
         for (const pattern of this.SYNC_PATTERNS) {
             if (pattern.test(output))
@@ -103,7 +118,22 @@ export class SelfHealingService {
         }
         return [...new Set(lines)];
     }
-    buildHealInstruction(kind, failedLocators, failedFiles, failedLines, rawError) {
+    buildHealInstruction(kind, failedLocators, failedFiles, failedLines, rawError, memoryPrompt) {
+        if (kind === 'AD_INTERCEPTED_FAILURE') {
+            return `[SELF-HEALING INSTRUCTION: UI INTERCEPTION / POPUP DETECTED]
+The test tried to interact with an element, but another element (likely an ad, popup, or overlay) intercepted the action.
+
+Item 13 Fix Strategy:
+  1. Call inspect_page_dom with includeIframes: true.
+  2. Search the AOM for elements with roles like 'dialog', 'alert', or generic <div>/<a> that cover the viewport.
+  3. Common Ad/Popup selectors: \`[aria-label="Close"]\`, \`button.close\`, \`.modal-close\`, \`#ad-overlay\`.
+  4. In your Page Object, add a "Close Popup" helper or a \`beforeAction\` hook that checks if an interceptor is visible and clicks it.
+  5. Use Rule 23: Ensure every interaction that might be blocked has a guard or an automatic retry with a "Check for Popups" first.
+
+Failed interaction details:
+${failedLines.map(l => `  > ${l}`).join('\n')}
+${failedLocators.map(l => `  - Intercepted Locator: ${l}`).join('\n')}\n`;
+        }
         if (kind === 'SYNCHRONIZATION_FAILURE') {
             return `[SELF-HEALING INSTRUCTION: SYNCHRONIZATION FAILURE DETECTED]
 The test action COMPLETED (the locator was found and the interaction ran), but the DOM assertion
@@ -167,6 +197,8 @@ ${locatorSection}
 
 ${fileSection}
 ${codeSection}
+
+${memoryPrompt}
 
 STEP 3 - Update the Page Object file with the corrected locator:
   Replace the failing locator in the POM method with the new, verified selector.

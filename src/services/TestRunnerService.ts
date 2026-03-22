@@ -30,18 +30,19 @@ export class TestRunnerService implements ITestRunner {
         passed: true,
         output: `[SUCCESS] Tests passed!\n\nStandard Output:\n${stdout}\n\nStandard Error:\n${stderr}`
       };
-    } catch (error: any) {
+    } catch (error) {
       // Check if the error is a timeout kill
-      if (error.killed) {
+      if (typeof error === 'object' && error !== null && 'killed' in error && error.killed) {
         return {
           passed: false,
-          output: `[TIMEOUT] Test run exceeded the ${runTimeout / 1000}s limit and was killed.\n\nPartial Output:\n${error.stdout || ''}\n\nIncrease testRunTimeout in mcp-config.json if your suite needs more time.`
+          output: `[TIMEOUT] Test run exceeded the ${runTimeout / 1000}s limit and was killed.\n\nPartial Output:\n${(error as any).stdout || ''}\n\nIncrease testRunTimeout in mcp-config.json if your suite needs more time.`
         };
       }
       // In JS, exec throws if exit code is not 0, which happens on test failures.
+      const msg = error instanceof Error ? error.message : String(error);
       return {
         passed: false,
-        output: `[FAILED] Tests failed or failed to compile.\n\nCommand Error:\n${error.message}\n\nStandard Output:\n${error.stdout || ''}\n\nStandard Error:\n${error.stderr || ''}`
+        output: `[FAILED] Tests failed or failed to compile.\n\nCommand Error:\n${msg}\n\nStandard Output:\n${(error as any)?.stdout || ''}\n\nStandard Error:\n${(error as any)?.stderr || ''}`
       };
     }
   }

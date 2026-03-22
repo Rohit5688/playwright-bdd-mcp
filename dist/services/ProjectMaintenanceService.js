@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import { McpConfigService } from './McpConfigService.js';
 import { UserStoreService } from './UserStoreService.js';
 import { EnvManagerService } from './EnvManagerService.js';
@@ -19,15 +20,35 @@ export class ProjectMaintenanceService {
     async ensureUpToDate(projectRoot) {
         const results = [];
         const root = path.resolve(projectRoot);
-        // 1. Ensure/Upgrade mcp-config.json
-        const cfg = this.mcpConfig.scaffold(root);
+        // 1. Read existing config or scaffold new one
+        let cfg = this.mcpConfig.read(root);
+        // Item 4: Record project root if not set
+        if (!cfg.projectRoot) {
+            cfg.projectRoot = root;
+            this.mcpConfig.write(root, { projectRoot: root });
+            results.push(`✅ projectRoot set to ${root} in mcp-config.json`);
+        }
+        // Item 3 & 6: Discovery of existing files
+        const rootFiles = fs.readdirSync(root);
+        const existingEnv = rootFiles.find((f) => f === '.env' || f.startsWith('.env.'));
+        const existingPlaywrightConfig = rootFiles.find((f) => f.startsWith('playwright.config.'));
+        if (existingEnv) {
+            results.push(`ℹ️ Existing environment file detected: ${existingEnv}. MCP will reuse it.`);
+        }
+        else {
+            // 3. Ensure environment-specific .env files
+            this.envManager.scaffoldMulti(root, cfg.environments);
+            results.push(`✅ Environment-specific .env files scaffolded (none found).`);
+        }
+        if (existingPlaywrightConfig) {
+            results.push(`ℹ️ Existing Playwright config detected: ${existingPlaywrightConfig}. MCP will respect it.`);
+        }
+        // 2. Ensure/Upgrade mcp-config.json (scaffold is idempotent)
+        cfg = this.mcpConfig.scaffold(root);
         results.push(`✅ MCP Config ensured at v${cfg.version}`);
         // 2. Ensure environment-specific user stores (.json)
         this.userStore.scaffold(root, cfg.environments);
         results.push(`✅ User credential stores verified for: ${cfg.environments.join(', ')}`);
-        // 3. Ensure environment-specific .env files
-        this.envManager.scaffoldMulti(root, cfg.environments);
-        results.push(`✅ Environment-specific .env files verified (scaffolded if missing).`);
         // 4. Regenerate user-helper.ts (to ensure latest types/env logic)
         const storeData = this.userStore.read(root, cfg.currentEnvironment);
         const roles = storeData.exists && storeData.roles.length > 0 ? storeData.roles : ['admin', 'standard', 'readonly'];

@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 export const DEFAULT_CONFIG = {
-    version: '1.0.0',
-    tags: ['@smoke', '@regression', '@e2e'],
+    version: '2.4.0',
+    tags: ['@smoke', '@regression', '@e2e', '@a11y'],
     envKeys: { baseUrl: 'BASE_URL' },
     dirs: {
         features: 'features',
@@ -20,6 +20,10 @@ export const DEFAULT_CONFIG = {
     environments: ['local', 'staging', 'prod'],
     waitStrategy: 'networkidle',
     testRunTimeout: 120_000,
+    architectureNotesPath: 'docs/mcp-architecture-notes.md',
+    additionalDataPaths: [],
+    a11yStandards: ['wcag2aa'],
+    a11yReportPath: 'test-results/a11y-report.json'
 };
 /**
  * McpConfigService — Phase 23

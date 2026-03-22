@@ -55,6 +55,29 @@ export interface McpConfig {
      * Defaults to 120000 (2 minutes). Increase for large test suites.
      */
     testRunTimeout: number;
+    /**
+     * Path to store/read special architecture notes about custom wrappers or patterns.
+     * Defaults to 'docs/mcp-architecture-notes.md'.
+     */
+    architectureNotesPath: string;
+    /**
+     * Absolute path to the actual automation code.
+     * If provided, MCP tools can use this as a fallback projectRoot.
+     */
+    projectRoot?: string;
+    /**
+     * Additional folder names or relative paths where test data (JSON/TS/JS) might be stored.
+     * Scanned recursively by the codebase analyzer.
+     */
+    additionalDataPaths: string[];
+    /**
+     * Accessibility standards to check against (e.g. ['wcag2aa', 'wcag21aa']).
+     */
+    a11yStandards: string[];
+    /**
+     * Path where accessibility violation reports should be saved.
+     */
+    a11yReportPath: string;
 }
 export declare const DEFAULT_CONFIG: McpConfig;
 /**

@@ -73,7 +73,7 @@ export class DomInspectorService {
         }
         catch (error) {
             // --- 18A FIX: Friendly, actionable error messages ---
-            const msg = error?.message ?? String(error);
+            const msg = error instanceof Error ? error.message : String(error);
             if (msg.includes('ECONNREFUSED') || msg.includes('ERR_CONNECTION_REFUSED')) {
                 return `[ERROR] Could not reach "${url}". Is the server running and accessible from this machine?`;
             }

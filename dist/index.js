@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -17,6 +18,12 @@ import { SuiteSummaryService } from "./services/SuiteSummaryService.js";
 import { McpConfigService, DEFAULT_CONFIG } from './services/McpConfigService.js';
 import { UserStoreService } from "./services/UserStoreService.js";
 import { ProjectMaintenanceService } from "./services/ProjectMaintenanceService.js";
+import { SeleniumMigrationService } from "./services/SeleniumMigrationService.js";
+import { RefactoringService } from "./services/RefactoringService.js";
+import { FixtureDataService } from "./services/FixtureDataService.js";
+import { AnalyticsService } from "./services/AnalyticsService.js";
+import { LearningService } from "./services/LearningService.js";
+import { PipelineService } from "./services/PipelineService.js";
 import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
 // SOLID: Dependency Injection Root
 const analyzer = new CodebaseAnalyzerService();
@@ -31,6 +38,12 @@ const suiteSummary = new SuiteSummaryService();
 const mcpConfig = new McpConfigService();
 const userStore = new UserStoreService();
 const maintenance = new ProjectMaintenanceService();
+const seleniumMigrator = new SeleniumMigrationService();
+const refactoringService = new RefactoringService();
+const fixtureDataService = new FixtureDataService();
+const analyticsService = new AnalyticsService();
+const learningService = new LearningService();
+const pipelineService = new PipelineService();
 const server = new Server({
     name: "playwright-bdd-pom-mcp",
     version: "1.0.0",
@@ -156,7 +169,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                                 required: ["path", "content"]
                             }
                         },
-                        pageUrl: { type: "string", description: "Optional URL used to re-inspect the DOM during self-healing retries." }
+                        pageUrl: { type: "string", description: "Optional URL used to re-inspect the DOM during self-healing retries." },
+                        dryRun: { type: "boolean", description: "If true, audits and validates the files but skips writing to disk and testing. Returns a preview." }
                     },
                     required: ["projectRoot", "files"],
                 },
@@ -233,6 +247,120 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     },
                     required: ["projectRoot", "action"]
                 }
+            },
+            {
+                name: "migrate_from_selenium",
+                description: "Returns a rigid system instruction context to the client LLM, ensuring the chat completion correctly translates legacy Java/Python/JS Selenium code into strict TypeScript Playwright-BDD code, automatically applying correct wait strategies, iframe scopes, and window handlers.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectRoot: { type: "string", description: "Absolute path to the automation project." },
+                        legacyCode: { type: "string", description: "The raw legacy Selenium code snippet or file content." },
+                        sourceDialect: { type: "string", enum: ["java", "python", "javascript", "csharp", "auto"], description: "The language/dialect of the legacy code." }
+                    },
+                    required: ["projectRoot", "legacyCode", "sourceDialect"]
+                }
+            },
+            {
+                name: "suggest_refactorings",
+                description: "Analyzes the codebase to find duplicate step definitions and unused Page Object methods. Returns a structured JSON/Markdown plan for pruning and consolidating the test suite. Call this periodically during a session to keep the codebase clean.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectRoot: { type: "string", description: "Absolute path to the automation project." }
+                    },
+                    required: ["projectRoot"]
+                }
+            },
+            {
+                name: "generate_fixture",
+                description: "Generates strict system instructions to help the LLM create a Playwright test fixture and a Faker.js data factory for typed mock data generation.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        entityName: { type: "string", description: "Name of the entity being mocked (e.g., 'User', 'Product')." },
+                        schemaDefinition: { type: "string", description: "Text description, JSON schema, or TypeScript interface defining the fields of the entity." }
+                    },
+                    required: ["entityName", "schemaDefinition"]
+                }
+            },
+            {
+                name: "update_visual_baselines",
+                description: "Executes the Playwright test suite with the --update-snapshots flag to rebaseline any visual regression failures (toHaveScreenshot).",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectRoot: { type: "string", description: "Absolute path to the automation project." },
+                        specificTestArgs: { type: "string", description: "Optional arguments like a specific feature file path or project flag." },
+                        tags: { type: "string", description: "Optional: filter by tag(s), e.g. '@smoke' or '@regression'. Passed as --grep to Playwright." }
+                    },
+                    required: ["projectRoot"]
+                }
+            },
+            {
+                name: "request_user_clarification",
+                description: "CRITICAL: Call this tool when you encounter an architectural ambiguity or missing requirement that prevents you from confidently generating code. This returns a strict SYSTEM HALT directive forcing the AI Host Client to stop, prompt the human user with your question, and wait for their answer before continuing.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        question: { type: "string", description: "The exact question you want to ask the user." },
+                        options: { type: "array", items: { type: "string" }, description: "Optional: a list of suggested choices to make it easier for the user to reply." },
+                        context: { type: "string", description: "A brief explanation of WHY you are blocked and need clarification." }
+                    },
+                    required: ["question", "context"]
+                }
+            },
+            {
+                name: "train_on_example",
+                description: "Injects custom team knowledge or learned coding fixes into the persistent MCP memory. Use this whenever the user explicitly corrects a Playwright execution error, so the AI does not repeat the same scripting mistake in future generations.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectRoot: { type: "string", description: "Absolute path to the automation project." },
+                        issuePattern: { type: "string", description: "The recurring error or structural ambiguity (e.g., 'Locating shadow root elements on login page', 'Missing await on dynamic loader')." },
+                        solution: { type: "string", description: "The exact code snippet or strategy required to overcome the issue." },
+                        tags: { type: "array", items: { type: "string" }, description: "Optional module or feature tags." }
+                    },
+                    required: ["projectRoot", "issuePattern", "solution"]
+                }
+            },
+            {
+                name: "generate_ci_pipeline",
+                description: "Generates a fully-configured CI/CD pipeline template (GitHub Actions, GitLab CI, or Jenkins) tailored for Playwright-BDD, including HTML report publishing.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectRoot: { type: "string", description: "Absolute path to the automation project." },
+                        provider: { type: "string", description: "The CI/CD provider: 'github', 'gitlab', or 'jenkins'." },
+                        runOnPush: { type: "boolean", description: "Whether to trigger the pipeline on git push/PR." },
+                        runOnSchedule: { type: "string", description: "Optional cron schedule (e.g., '0 0 * * *' for nightly)." },
+                        nodeVersion: { type: "string", description: "Optional Node version (defaults to '20')." }
+                    },
+                    required: ["projectRoot", "provider", "runOnPush"]
+                }
+            },
+            {
+                name: "export_jira_bug",
+                description: "Generates a Jira-formatted bug report from a failed Playwright test, including file paths to the Playwright Trace and Video recordings.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        testName: { type: "string", description: "The name of the failing test." },
+                        rawError: { type: "string", description: "The Playwright error output." }
+                    },
+                    required: ["testName", "rawError"]
+                }
+            },
+            {
+                name: "export_team_knowledge",
+                description: "Exports the AI's internal mcp-learning.json brain into a human-readable Markdown file so the engineering team can review the autonomously learned rules.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        projectRoot: { type: "string" }
+                    },
+                    required: ["projectRoot"]
+                }
             }
         ],
     };
@@ -247,6 +375,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const config = mcpConfig.read(projectRoot);
                 const resolvedWrapper = customWrapperPackage || config.basePageClass;
                 const analysis = await analyzer.analyze(projectRoot, resolvedWrapper);
+                // Supplementary metadata for the LLM prompt
                 analysis.mcpConfig = {
                     version: config.version || '0.0.0',
                     upgradeNeeded: (config.version || '0.0.0') < DEFAULT_CONFIG.version,
@@ -263,10 +392,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         helperImport: `import { getUser } from '../test-data/user-helper.js';`
                     };
                 }
-                const envResult = envManager.read(projectRoot);
-                if (envResult.exists) {
-                    analysis.envConfig = { keys: envResult.keys };
-                }
                 lastAnalysisResult = analysis;
                 return { content: [{ type: "text", text: sanitizeOutput(JSON.stringify(analysis, null, 2)) }] };
             }
@@ -278,7 +403,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (!lastAnalysisResult) {
                     lastAnalysisResult = await analyzer.analyze(projectRoot, resolvedWrapper);
                 }
-                const instruction = await generator.generatePromptInstruction(testDescription, projectRoot, lastAnalysisResult, resolvedWrapper, baseUrl);
+                const memoryPrompt = learningService.getKnowledgePromptInjection(projectRoot, lastAnalysisResult.mcpLearnDirectives);
+                const instruction = await generator.generatePromptInstruction(testDescription, projectRoot, lastAnalysisResult, resolvedWrapper, baseUrl, memoryPrompt);
                 return { content: [{ type: "text", text: instruction }] };
             }
             case "run_playwright_test": {
@@ -288,6 +414,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const grepArg = tags ? `--grep "${tags}"` : '';
                 const combinedArgs = [specificTestArgs, grepArg].filter(Boolean).join(' ');
                 const result = await runner.runTests(projectRoot, combinedArgs || undefined, config.testRunTimeout);
+                return { content: [{ type: "text", text: sanitizeOutput(result.output) }] };
+            }
+            case "update_visual_baselines": {
+                const { projectRoot, specificTestArgs, tags } = args;
+                await maintenance.ensureUpToDate(projectRoot);
+                const config = mcpConfig.read(projectRoot);
+                const grepArg = tags ? `--grep "${tags}"` : '';
+                const baselineArg = '--update-snapshots';
+                const combinedArgs = [specificTestArgs, grepArg, baselineArg].filter(Boolean).join(' ');
+                const result = await runner.runTests(projectRoot, combinedArgs, config.testRunTimeout);
                 return { content: [{ type: "text", text: sanitizeOutput(result.output) }] };
             }
             case "summarize_suite": {
@@ -301,8 +437,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: "text", text: domTree }] };
             }
             case "self_heal_test": {
-                const { testOutput, pageUrl } = args;
-                const analysis = selfHealer.analyzeFailure(testOutput);
+                const { testOutput, pageUrl, projectRoot } = args;
+                let memoryPrompt = '';
+                if (projectRoot) {
+                    memoryPrompt = learningService.getKnowledgePromptInjection(projectRoot);
+                }
+                const analysis = selfHealer.analyzeFailure(testOutput, memoryPrompt);
                 let response = analysis.healInstruction;
                 if (analysis.canAutoHeal && pageUrl) {
                     const liveDom = await domInspector.inspect(pageUrl);
@@ -311,11 +451,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: "text", text: sanitizeOutput(response) }] };
             }
             case "validate_and_write": {
-                const { projectRoot, files, pageUrl } = args;
+                const { projectRoot, files, pageUrl, dryRun } = args;
                 const MAX_RETRIES = 3;
                 const currentAttempt = (retrySessionMap.get(projectRoot) ?? 0) + 1;
                 retrySessionMap.set(projectRoot, currentAttempt);
-                const writeResult = fileWriter.writeFiles(projectRoot, files);
+                // Preview Mode explicitly skips touching the file system
+                if (dryRun) {
+                    const writeResult = fileWriter.writeFiles(projectRoot, files, true);
+                    const secretViolations = auditGeneratedCode(files);
+                    let previewMsg = `✅ DRY RUN SUCCESS\n\nProposed files validated (NOT written):\n${writeResult.written.map((f) => `  - ${f}`).join('\n')}`;
+                    if (secretViolations.length > 0) {
+                        previewMsg += `\n\n🔒 SECRET AUDIT WARNING:\n${secretViolations.join('\n')}`;
+                    }
+                    if (writeResult.warnings.length > 0) {
+                        previewMsg += `\n\n⚠️ PATH WARNINGS:\n${writeResult.warnings.join('\n')}`;
+                    }
+                    return { content: [{ type: "text", text: sanitizeOutput(previewMsg) }] };
+                }
+                const writeResult = fileWriter.writeFiles(projectRoot, files, false);
                 // Phase 35b: Audit generated code for hardcoded secrets before running tests
                 const secretViolations = auditGeneratedCode(files);
                 if (secretViolations.length > 0) {
@@ -489,16 +642,124 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 }
                 throw new Error(`Unknown manage_users action: ${action}. Valid values: list, add-role, scaffold`);
             }
+            case "migrate_from_selenium": {
+                const { projectRoot, legacyCode, sourceDialect } = args;
+                const codebaseContext = await analyzer.analyze(projectRoot);
+                const memoryPrompt = learningService.getKnowledgePromptInjection(projectRoot, codebaseContext.mcpLearnDirectives);
+                const systemPrompt = seleniumMigrator.generateMigrationPrompt(projectRoot, legacyCode, sourceDialect, codebaseContext, memoryPrompt);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: systemPrompt
+                        }
+                    ]
+                };
+            }
+            case "suggest_refactorings": {
+                const { projectRoot } = args;
+                await maintenance.ensureUpToDate(projectRoot);
+                const analysis = await analyzer.analyze(projectRoot);
+                const report = refactoringService.generateRefactoringSuggestions(analysis);
+                return {
+                    content: [{ type: "text", text: sanitizeOutput(report) }]
+                };
+            }
+            case "generate_fixture": {
+                const { entityName, schemaDefinition } = args;
+                const systemPrompt = fixtureDataService.generateFixturePrompt(entityName, schemaDefinition);
+                return {
+                    content: [{ type: "text", text: systemPrompt }]
+                };
+            }
+            case "generate_rca_prompt": {
+                const { errorMessage } = args;
+                const systemPrompt = analyticsService.generateRcaPrompt(errorMessage);
+                return {
+                    content: [{ type: "text", text: systemPrompt }]
+                };
+            }
+            case "analyze_coverage_gaps": {
+                const { projectRoot } = args;
+                const systemPrompt = analyticsService.analyzeCoverageGaps(projectRoot);
+                return {
+                    content: [{ type: "text", text: systemPrompt }]
+                };
+            }
+            case "request_user_clarification": {
+                const { question, options, context } = args;
+                let responseText = `🚨 SYSTEM HALT: CLARIFICATION REQUIRED 🚨\n\n`;
+                responseText += `Reason for pausing: ${context}\n\n`;
+                responseText += `SYSTEM INSTRUCTION TO AI CLIENT: You MUST STOP generating files or executing further commands. Present the following question directly to the human user, and wait for their explicit answer.\n\n`;
+                responseText += `Q: **${question}**\n`;
+                if (options && options.length > 0) {
+                    responseText += `Options:\n`;
+                    options.forEach((opt, idx) => {
+                        responseText += `  ${idx + 1}. ${opt}\n`;
+                    });
+                }
+                return { content: [{ type: "text", text: sanitizeOutput(responseText) }] };
+            }
+            case "train_on_example": {
+                const { projectRoot, issuePattern, solution, tags } = args;
+                const rule = learningService.learn(projectRoot, issuePattern, solution, tags || []);
+                const responseText = `Successfully learned new rule!\nSaved to mcp-learning.json\nPattern: ${rule.pattern}\nSolution: ${rule.solution}`;
+                return { content: [{ type: "text", text: sanitizeOutput(responseText) }] };
+            }
+            case "generate_ci_pipeline": {
+                const { projectRoot, provider, runOnPush, runOnSchedule, nodeVersion } = args;
+                const targetPath = pipelineService.generatePipeline(projectRoot, {
+                    provider,
+                    runOnPush,
+                    runOnSchedule,
+                    nodeVersion
+                });
+                return { content: [{ type: "text", text: `✅ Pipeline successfully generated at:\n  - ${targetPath}\n\nEnsure you push this file to your repository and setup branch protections if applicable.` }] };
+            }
+            case "export_jira_bug": {
+                const { testName, rawError } = args;
+                const report = `h2. Bug: Automated Test Failure - ${testName}
+
+h3. Error Log
+{code:java}
+${rawError}
+{code}
+
+h3. Attachments Available Local to Runner
+Please attach the following artifacts from the CI machine or your local \`test-results\` / \`playwright-report\` folder:
+* *Trace File*: \`playwright-report/trace.zip\` (Upload to https://trace.playwright.dev to view)
+* *Video Recording*: \`test-results/**/video.webm\`
+
+h3. Next Steps
+# Review the attached trace to see the DOM snapshot at the time of failure.
+# If this is a scripting error, use the agent's \`self_heal_test\` tool to fix the page object.`;
+                return { content: [{ type: "text", text: sanitizeOutput(report) }] };
+            }
+            case "export_team_knowledge": {
+                const { projectRoot } = args;
+                const brain = learningService.getKnowledge(projectRoot);
+                const docsDir = path.join(projectRoot, 'docs');
+                if (!fs.existsSync(docsDir))
+                    fs.mkdirSync(docsDir, { recursive: true });
+                const filePath = path.join(docsDir, 'team-knowledge.md');
+                let md = `# Autonomous AI QA Brain\n\nThis document was automatically generated from \`.playwright-bdd-mcp/mcp-learning.json\`. These are the custom rules the AI has learned from human corrections.\n\n`;
+                brain.rules.forEach((r, idx) => {
+                    md += `## Rule ${idx + 1}: ${r.pattern}\n**Action**: ${r.solution}\n**Tags**: ${r.tags.join(', ')}\n**Learned On**: ${r.timestamp}\n\n`;
+                });
+                fs.writeFileSync(filePath, md, 'utf8');
+                return { content: [{ type: "text", text: `✅ Team Knowledge successfully exported to ${filePath}.\nCommit this to your repository to share with the team!` }] };
+            }
             default:
                 throw new Error(`Tool not found: ${name}`);
         }
     }
     catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         console.error(`Error in tool ${name}:`, error);
         return {
             content: [{
                     type: "text",
-                    text: `❌ ERROR in tool "${name}": ${error.message}\n\nPlease check your inputs or try again.`
+                    text: `❌ ERROR in tool "${name}": ${msg}\n\nPlease check your inputs or try again.`
                 }],
             isError: true
         };
@@ -562,8 +823,9 @@ async function startServer(options) {
             }
         });
         const port = parseInt(options.port, 10);
-        app.listen(port, options.host, () => {
-            console.log(`[playwright-bdd-pom-mcp] Remote SSE listening on http://${options.host}:${port}/sse`);
+        const host = options.host || "127.0.0.1";
+        app.listen(port, host, () => {
+            console.log(`[playwright-bdd-pom-mcp] Remote SSE listening on http://${host}:${port}/sse`);
         });
     }
     else {

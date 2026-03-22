@@ -33,7 +33,7 @@ export declare class FileWriterService {
      *
      * Returns the list of absolute paths written, plus any warnings.
      */
-    writeFiles(projectRoot: string, files: GeneratedFile[]): {
+    writeFiles(projectRoot: string, files: GeneratedFile[], dryRun?: boolean): {
         written: string[];
         warnings: string[];
     };

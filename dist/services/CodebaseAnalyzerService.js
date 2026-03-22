@@ -84,20 +84,157 @@ export class CodebaseAnalyzerService {
                     detectedMethods: isInstalled ? extractedMethods : [],
                     isInstalled
                 };
+                // Item 11: Create Architecture Notes for current/future runs
+                if (isInstalled) {
+                    const archNotesPath = config.architectureNotesPath;
+                    const fullArchPath = path.resolve(projectRoot, archNotesPath);
+                    const archContent = `[MCP ARCHITECTURE NOTES - ITEM 11]
+Package: ${customWrapperPackage}
+Detected Methods:
+- ${extractedMethods.join('\n- ')}
+
+RULES FOR AI:
+1. Prefer these library functions over native Playwright APIs.
+2. Even with this wrapper, ensure every interaction is within a Page Object Method (POM Enforcement).
+`;
+                    try {
+                        const archDir = path.dirname(fullArchPath);
+                        if (!await this.directoryExists(archDir))
+                            await fs.mkdir(archDir, { recursive: true });
+                        await fs.writeFile(fullArchPath, archContent, 'utf-8');
+                        result.customWrapper.architectureNotesPath = archNotesPath;
+                    }
+                    catch (e) {
+                        const msg = e instanceof Error ? e.message : String(e);
+                        console.warn(`Could not write architecture notes: ${msg}`);
+                    }
+                }
                 if (!isInstalled) {
                     result.customWrapper.resolutionError = `⚠️ WARNING: The custom wrapper package '${customWrapperPackage}' could not be resolved locally. Ensure it is installed in node_modules, otherwise the AI cannot introspect its APIs.`;
                 }
             }
-            // 6. Provide recommendation
+            // 6. Discover NPM Scripts
+            const pkgPath = path.join(projectRoot, 'package.json');
+            if (await this.fileExists(pkgPath)) {
+                try {
+                    const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8'));
+                    if (pkg.scripts) {
+                        result.npmScripts = pkg.scripts;
+                    }
+                }
+                catch (e) {
+                    console.warn('Failed to parse package.json for scripts');
+                }
+            }
+            // 7. Discover existing Env Files
+            const rootFiles = await fs.readdir(projectRoot);
+            const envFiles = rootFiles.filter(f => f.startsWith('.env') && !f.endsWith('.example'));
+            result.envConfig = {
+                present: envFiles.length > 0,
+                files: envFiles,
+                keys: []
+            };
+            // 8. Discover Test Data & Fixtures (Broad Recursive Scan)
+            const dataDirs = [
+                path.join(projectRoot, 'fixtures'),
+                path.join(projectRoot, 'test-data'),
+                path.join(projectRoot, 'payloads'),
+                path.join(projectRoot, 'data'),
+                path.join(projectRoot, 'mocks'),
+                ...(config.additionalDataPaths || []).map(p => path.isAbsolute(p) ? p : path.join(projectRoot, p))
+            ];
+            result.existingTestData = { payloads: [], fixtures: [] };
+            const uniqueFiles = new Set();
+            for (const dir of dataDirs) {
+                if (await this.directoryExists(dir)) {
+                    const files = await this.readAllFiles(dir, ''); // Get all files initially
+                    for (const f of files) {
+                        if (uniqueFiles.has(f))
+                            continue;
+                        const ext = path.extname(f);
+                        if (!['.json', '.ts', '.js'].includes(ext))
+                            continue;
+                        const relativePath = path.relative(projectRoot, f);
+                        const content = await fs.readFile(f, 'utf8');
+                        const sampledStructure = this.extractSampleStructure(content, ext);
+                        // Heuristic: if it's in a 'fixtures' dir, count as fixture, else payload
+                        if (f.toLowerCase().includes('fixtures')) {
+                            result.existingTestData.fixtures.push({ path: relativePath, sampledStructure });
+                        }
+                        else {
+                            result.existingTestData.payloads.push({ path: relativePath, sampledStructure });
+                        }
+                        uniqueFiles.add(f);
+                        // Phase 46.1: @mcp-learn Comment Scanner
+                        if (ext === '.ts' || ext === '.js') {
+                            const mcpLearnRegex = /\/\/\s*@mcp-learn:\s*(.+?)\s*->\s*(.+)/g;
+                            let learnMatch;
+                            while ((learnMatch = mcpLearnRegex.exec(content)) !== null) {
+                                if (learnMatch[1] && learnMatch[2]) {
+                                    if (!result.mcpLearnDirectives)
+                                        result.mcpLearnDirectives = [];
+                                    result.mcpLearnDirectives.push(`Codebase Rule: When "${learnMatch[1].trim()}" -> Action: ${learnMatch[2].trim()}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // --- Phase 37.2: Enhanced Codebase Analysis ---
+            // Detect Duplicate Steps
+            const stepCounts = new Map();
+            for (const def of result.existingStepDefinitions) {
+                for (const step of def.steps) {
+                    if (!stepCounts.has(step))
+                        stepCounts.set(step, []);
+                    stepCounts.get(step).push(def.file);
+                }
+            }
+            result.duplicateSteps = Array.from(stepCounts.entries())
+                .filter(([_, files]) => files.length > 1)
+                .map(([step, files]) => ({ step, files: Array.from(new Set(files)) }));
+            // Detect Unused POM Methods
+            const usedMethods = new Set();
+            for (const def of result.existingStepDefinitions) {
+                try {
+                    const content = await fs.readFile(path.join(projectRoot, def.file), 'utf8');
+                    const methodMatch = content.matchAll(/\.([a-zA-Z0-9_]+)\s*\(/g);
+                    for (const m of methodMatch) {
+                        usedMethods.add(m[1]);
+                    }
+                }
+                catch { }
+            }
+            result.unusedPomMethods = [];
+            for (const po of result.existingPageObjects) {
+                const unused = po.publicMethods.filter(signature => {
+                    const name = signature.split('(')[0]?.trim();
+                    return name && !usedMethods.has(name);
+                });
+                if (unused.length > 0) {
+                    result.unusedPomMethods.push({ path: po.path, unusedMethods: unused });
+                }
+            }
+            // 9. Provide recommendation
             if (!result.bddSetup.present) {
-                result.recommendation = "Playwright-BDD config not found. You will need to provision standard setup: features/, step-definitions/, pages/, and playwright.config.ts modifications.";
+                result.recommendation = "Playwright-BDD config not found. Standard setup needed.";
+                if (result.bddSetup.configFile) {
+                    result.recommendation += ` (Found existing ${result.bddSetup.configFile} - reuse and modify)`;
+                }
             }
             else {
                 result.recommendation = "Playwright-BDD is present. Reuse existing wrapper base pages and extend Page Object Models.";
             }
+            // 10. Phase 43: Duplicate Installation Guard
+            const warnings = await this.scanForDuplicatePlaywrightInstallations(projectRoot);
+            if (warnings.length > 0) {
+                result.duplicateInstallWarnings = warnings;
+                result.recommendation += "\nCRITICAL WARNING: Multiple @playwright/test installations detected. This will cause 'describe() unexpectedly called' errors. You MUST uninstall the duplicates.";
+            }
         }
         catch (error) {
-            console.error(`Error analyzing codebase: ${error.message}`);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error(`Error analyzing codebase: ${msg}`);
         }
         return result;
     }
@@ -109,6 +246,32 @@ export class CodebaseAnalyzerService {
         catch {
             return false;
         }
+    }
+    /**
+     * Scans upward from the project root to check for duplicate @playwright/test installations.
+     * Double installations cause the notorious 'describe() unexpectedly called' error.
+     */
+    async scanForDuplicatePlaywrightInstallations(startDir) {
+        const installations = [];
+        let currentDir = path.resolve(startDir);
+        const rootDir = path.parse(currentDir).root;
+        // Safety break at 10 levels deep to prevent infinite loops or sluggish performance
+        let depth = 0;
+        while (currentDir !== rootDir && depth < 10) {
+            const pmPath = path.join(currentDir, 'node_modules', '@playwright', 'test', 'package.json');
+            if (await this.fileExists(pmPath)) {
+                installations.push(currentDir);
+            }
+            currentDir = path.dirname(currentDir);
+            depth++;
+        }
+        if (installations.length > 1) {
+            return [
+                `Duplicate @playwright/test instances found in: ${installations.join(' AND ')}.`,
+                `Recommendation: Delete the node_modules in the parent directory or use a singular monorepo root. Double loading breaks test.describe().`
+            ];
+        }
+        return [];
     }
     async directoryExists(dirPath) {
         try {
@@ -237,6 +400,36 @@ export class CodebaseAnalyzerService {
             // Silently fail and return empty array if resolution drops, graceful degradation
         }
         return [];
+    }
+    /**
+     * Naively extracts top-level keys or structures from JSON/TS/JS data files.
+     * Returns a string summarizing the shape (e.g. "{ id, name, details: { ... } }")
+     */
+    extractSampleStructure(content, ext) {
+        try {
+            if (ext === '.json') {
+                const data = JSON.parse(content);
+                if (Array.isArray(data)) {
+                    return data.length > 0 ? `Array of: { ${Object.keys(data[0]).join(', ')} }` : '[]';
+                }
+                return `{ ${Object.keys(data).join(', ')} }`;
+            }
+            // For TS/JS, look for exported objects or interfaces
+            const keysMatch = content.match(/export\s+(?:const|interface|type|let|var)\s+\w+\s*=\s*{([^}]*)}/);
+            if (keysMatch && keysMatch[1]) {
+                const keys = keysMatch[1].split(',')
+                    .map(k => (k.split(':')[0] || '').trim())
+                    .filter(k => k && !k.startsWith('//'));
+                return `{ ${keys.join(', ')} }`;
+            }
+            // Fallback: search for property-like patterns
+            const props = Array.from(content.matchAll(/['"]?([a-zA-Z0-9_]+)['"]?\s*:/g)).map(m => m[1]);
+            const uniqueProps = Array.from(new Set(props)).slice(0, 10);
+            return uniqueProps.length > 0 ? `{ ${uniqueProps.join(', ')}, ... }` : 'unknown structure';
+        }
+        catch {
+            return 'structure could not be parsed';
+        }
     }
 }
 //# sourceMappingURL=CodebaseAnalyzerService.js.map

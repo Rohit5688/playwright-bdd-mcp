@@ -1,0 +1,46 @@
+export class FixtureDataService {
+    /**
+     * Generates a strict system prompt instructing the LLM to scaffold a custom
+     * Playwright Fixture that generates mock data using faker-js.
+     */
+    generateFixturePrompt(entityName, schemaDefinition) {
+        return `
+You are an expert Playwright-BDD and TypeScript Developer.
+Your task is to generate a custom Playwright Fixture that yields a mock data factory for the requested entity using \`@faker-js/faker\`.
+
+### 🎯 TARGET ENTITY
+Entity Name: ${entityName}
+Schema / Requirements:
+\`\`\`
+${schemaDefinition}
+\`\`\`
+
+### 🛑 CRITICAL INSTRUCTIONS
+
+1. **TypeScript Interface**: 
+   - Define a strict TypeScript \`interface\` for the \`${entityName}\` based on the schema provided.
+   - If optional fields exist, mark them with \`?\`.
+
+2. **Faker.js Factory Function**:
+   - Write a \`build${entityName}(overrides?: Partial<${entityName}>): ${entityName}\` function.
+   - Use \`import { faker } from '@faker-js/faker';\` to populate default mock data (e.g., \`faker.internet.email()\`, \`faker.person.firstName()\`).
+   - Merge the \`overrides\` parameter into the return object so tests can customize specific fields.
+
+3. **Playwright Fixture Binding**:
+   - Create and export a custom \`test\` object using \`import { test as base } from 'playwright-bdd';\`.
+   - Extend the base test with the custom fixture.
+   - Example syntax:
+     \`\`\`typescript
+     export const test = base.extend<{ ${entityName}Factory: (overrides?: Partial<${entityName}>) => ${entityName} }>({
+       ${entityName}Factory: async ({}, use) => {
+         await use(build${entityName});
+       }
+     });
+     \`\`\`
+
+4. **Output Format**:
+   - Return ONLY the raw TypeScript code block. NO conversational filler. NO explanations.
+`;
+    }
+}
+//# sourceMappingURL=FixtureDataService.js.map
