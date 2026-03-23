@@ -594,7 +594,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const runConfig = mcpConfig.read(projectRoot);
-        const runResult = await runner.runTests(projectRoot, undefined, runConfig.testRunTimeout);
+        
+        // Scope the test run ONLY to the generated feature to save time and tokens
+        let targetArg = undefined;
+        const featureFile = files.find((f: any) => f.path.endsWith('.feature'));
+        if (featureFile && featureFile.content) {
+          const match = featureFile.content.match(/Feature:\s*(.+)/);
+          if (match && match[1]) {
+            targetArg = `--grep "${match[1].trim()}"`;
+          }
+        }
+
+        const runResult = await runner.runTests(projectRoot, targetArg, runConfig.testRunTimeout);
         const lastOutput = runResult.output;
 
         if (runResult.passed) {
