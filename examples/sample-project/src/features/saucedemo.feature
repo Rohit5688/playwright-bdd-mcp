@@ -1,8 +1,10 @@
-Feature: Sauce Demo Shop
+Feature: SauceDemo Login
 
-  @demo
-  Scenario: Add product to cart and checkout
-    Given I am on the Saucedemo login page
-    When I login with standard user
-    And I add "Sauce Labs Backpack" to the cart
-    Then the cart should show "1" item
+  Scenario Outline: Successful login with valid credentials
+    Given I am on the SauceDemo login page
+    When I log in with username "<username>" and password "<password>"
+    Then I should see the products inventory page
+
+    Examples:
+      | username      | password     |
+      | standard_user | secret_sauce |

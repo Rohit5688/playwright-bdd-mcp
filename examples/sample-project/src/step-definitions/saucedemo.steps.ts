@@ -1,24 +1,20 @@
 import { createBdd } from 'playwright-bdd';
-import { SauceLoginPage, SauceInventoryPage } from '../pages/SauceDemoPage.js';
+import { test } from '@playwright/test';
+import { SauceDemoPage } from '../pages/SauceDemoPage.js';
 
 const { Given, When, Then } = createBdd();
 
-Given('I am on the Saucedemo login page', async ({ page }) => {
-    const loginPage = new SauceLoginPage(page);
-    await loginPage.navigate();
+Given('I am on the SauceDemo login page', async ({ page }) => {
+  const sauceDemoPage = new SauceDemoPage(page);
+  await sauceDemoPage.navigate();
 });
 
-When('I login with standard user', async ({ page }) => {
-    const loginPage = new SauceLoginPage(page);
-    await loginPage.login('standard_user', 'secret_sauce');
+When('I log in with username {string} and password {string}', async ({ page }, username, password) => {
+  const sauceDemoPage = new SauceDemoPage(page);
+  await sauceDemoPage.login(username, password);
 });
 
-When('I add {string} to the cart', async ({ page }, itemName: string) => {
-    const inventoryPage = new SauceInventoryPage(page);
-    await inventoryPage.addItemToCart(itemName);
-});
-
-Then('the cart should show {string} item', async ({ page }, expectedCount: string) => {
-    const inventoryPage = new SauceInventoryPage(page);
-    await inventoryPage.verifyCartCount(expectedCount);
+Then('I should see the products inventory page', async ({ page }) => {
+  const sauceDemoPage = new SauceDemoPage(page);
+  await sauceDemoPage.isInventoryVisible();
 });

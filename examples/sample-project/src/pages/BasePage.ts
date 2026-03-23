@@ -2,7 +2,8 @@ import { Page, expect } from '@playwright/test';
 import 'dotenv/config';
 
 export class BasePage {
-  constructor(protected page: Page) { }
+  constructor(public page: Page) { }
+
 
   /**
    * Item 12: Standardized Page Stability Guard.
@@ -56,5 +57,11 @@ export class BasePage {
       console.error(`[A11Y] Violations found in ${scanName}:`, JSON.stringify(results.violations, null, 2));
     }
     expect(results.violations).toEqual([]);
+  }
+  async highlightElement(locator: any) {
+    await locator.evaluate((node: HTMLElement) => {
+      node.style.border = '3px solid red';
+      node.style.backgroundColor = 'yellow';
+    });
   }
 }

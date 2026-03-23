@@ -29,6 +29,8 @@ Detailed documentation, examples, and exact prompts to use with your AI client a
 *   [**Execution & Self-Healing**](docs/ExecutionAndHealing.md) - Running tests, interacting with the live DOM, and auto-healing locators.
 *   [**Continuous Integration & Jira**](docs/ContinuousIntegration.md) - Generating CI/CD pipelines, exporting Jira bugs, and LCOV coverage gaps.
 *   [**Team Collaboration & Autonomous Learning**](docs/TeamCollaboration.md) - Training the AI, `@mcp-learn` inline comments, and exporting the AI's internal knowledge base to your team.
+*   [**E2E Testing Guide**](docs/E2ETestingGuide.md) - Step-by-step guide to test every feature as an end user.
+*   [**Token Optimizer**](docs/TokenOptimizer.md) - Code Mode Execution for up to 98% token savings.
 
 ---
 
@@ -54,6 +56,9 @@ Detailed documentation, examples, and exact prompts to use with your AI client a
 * `analyze_coverage`: Reports on missing core functional flows and negative tests.
 * `export_bug_report`: Auto-classifies failures into Jira/Linear ready Markdown tickets with environment metadata.
 * `suggest_refactorings`: Flags unused POM methods and Duplicate Step Definitions.
+
+### **Token Optimization**
+* `execute_sandbox_code`: 🆕 **TURBO MODE** — Execute JavaScript inside a secure V8 sandbox on the server for up to **98% token savings**. See [Token Optimizer docs](docs/TokenOptimizer.md).
 
 ## Getting Started
 
