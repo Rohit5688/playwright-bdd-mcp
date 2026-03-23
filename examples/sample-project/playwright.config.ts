@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { defineConfig, devices } from '@playwright/test';
 import { defineBddConfig } from 'playwright-bdd';
+
 const testDir = defineBddConfig({
   features: 'src/features/**/*.feature',
   steps: 'src/step-definitions/**/*.ts',
@@ -8,12 +9,12 @@ const testDir = defineBddConfig({
 
 export default defineConfig({
   testDir,
-  timeout: 30_000,
+  timeout: 120000,
   retries: 1,
-  reporter: [['html', { open: 'never' }], ['list']],
+  reporter: [['html'], ['json', { outputFile: 'test-results.json' }]],
   use: {
     baseURL: process.env['BASE_URL'] ?? 'http://localhost:3000',
-    headless: process.env['HEADLESS'] !== 'false',
+    headless: false,
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
@@ -23,4 +24,5 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
+
 });

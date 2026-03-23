@@ -1,0 +1,146 @@
+{
+  "config": {
+    "configFile": "C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\playwright.config.ts",
+    "rootDir": "C:/Users/Rohit/mcp/playwright-bdd-pom-mcp/examples/sample-project/.features-gen",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/Rohit/mcp/playwright-bdd-pom-mcp/examples/sample-project/test-results",
+        "repeatEach": 1,
+        "retries": 1,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Users/Rohit/mcp/playwright-bdd-pom-mcp/examples/sample-project/.features-gen",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.2",
+    "workers": 4,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "src\\features\\ajax-toolkit.feature.spec.js",
+      "file": "src/features/ajax-toolkit.feature.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Ajax Toolkit demonstration",
+          "file": "src/features/ajax-toolkit.feature.spec.js",
+          "line": 4,
+          "column": 6,
+          "specs": [],
+          "suites": [
+            {
+              "title": "User navigates directly to Ajax Toolkit and types in HTML Editor",
+              "file": "src/features/ajax-toolkit.feature.spec.js",
+              "line": 6,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "Example #1",
+                  "ok": true,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 120000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "passed",
+                          "duration": 37857,
+                          "errors": [],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "steps": [
+                            {
+                              "title": "Given I navigate directly to \"https://www.ajaxtoolkit.net/HTMLEditor/HTMLEditor.aspx\"",
+                              "duration": 30993
+                            },
+                            {
+                              "title": "Then I clear the demo text and type \"This is typed by My AWSM MCP server\" in the editor",
+                              "duration": 1893
+                            },
+                            {
+                              "title": "And I verify the text \"This is typed by My AWSM MCP server\" is visible in the editor",
+                              "duration": 85
+                            }
+                          ],
+                          "startTime": "2026-03-23T09:26:58.006Z",
+                          "annotations": [],
+                          "attachments": []
+                        }
+                      ],
+                      "status": "expected"
+                    }
+                  ],
+                  "id": "4b506712376b56d5db94-b81abbbd78a1555c7ebb",
+                  "file": "src/features/ajax-toolkit.feature.spec.js",
+                  "line": 8,
+                  "column": 5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-03-23T09:26:52.659Z",
+    "duration": 50705.29,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

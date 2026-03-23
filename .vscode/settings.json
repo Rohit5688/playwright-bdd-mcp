@@ -1,0 +1,16 @@
+{
+    "playwrightBdd.configPath": "./examples/sample-project/playwright.config.ts",
+    "playwrightBdd.featureFolder": "./examples/sample-project/src/features",
+    "playwrightBdd.stepsFolder": "./examples/sample-project/src/step-definitions",
+    "playwrightBdd.autoDiscoverConfig": true,
+    "playwrightBdd.enableFeatureGen": true,
+    "playwrightBdd.stepsFilePattern": "./examples/sample-project/src/step-definitions/*.{js,ts,mjs,mts}",
+    "playwrightBdd.tsconfigPath": "./tsconfig.json",
+    "forge-runner.playwright.configPath": "playwright.config.ts",
+    "forge-runner.playwright.featureFolder": "src/features",
+    "forge-runner.playwright.stepsFolder": "src/step-definitions",
+    "forge-runner.playwright.projectRoot": "./examples/sample-project",
+    "forge-runner.playwright.enableFeatureGen": true,
+    "forge-runner.playwright.stepsFilePattern": "src/step-definitions/*.{js,ts,mjs,mts}",
+    "forge-runner.playwright.tsconfigPath": "tsconfig.json"
+}

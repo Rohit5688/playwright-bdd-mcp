@@ -2,14 +2,14 @@ import { Page, expect } from '@playwright/test';
 import 'dotenv/config';
 
 export class BasePage {
-  constructor(protected page: Page) {}
+  constructor(protected page: Page) { }
 
   /**
    * Item 12: Standardized Page Stability Guard.
    * Use this after navigation or tab-switching.
    */
   async waitForStable(selector?: string) {
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
     if (selector) {
       await expect(this.page.locator(selector)).toBeVisible();
     }
@@ -21,9 +21,9 @@ export class BasePage {
    */
   async closePopups() {
     const popupSelectors = [
-      '[aria-label="Close"]', 
-      'button.close', 
-      '.modal-close', 
+      '[aria-label="Close"]',
+      'button.close',
+      '.modal-close',
       '#ad-overlay-close'
     ];
     for (const selector of popupSelectors) {

@@ -6,5 +6,6 @@ Feature: Ajax Toolkit demonstration
     And I verify the text "<Message>" is visible in the editor
 
     Examples:
-      | Message                                 |
-      | This is typed by My AWSM MCP server     |
+    | Message                             |
+    | This is typed by My AWSM MCP server |
+    # | This is typed by My Rohit           |

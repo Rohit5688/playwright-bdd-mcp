@@ -31,6 +31,8 @@ import { PipelineService } from "./services/PipelineService.js";
 import { PlaywrightSessionService } from "./services/PlaywrightSessionService.js";
 import type { CodebaseAnalysisResult } from "./interfaces/ICodebaseAnalyzer.js";
 import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
+import { executeSandbox } from "./services/SandboxEngine.js";
+import type { SandboxApiRegistry } from "./services/SandboxEngine.js";
 
 // SOLID: Dependency Injection Root
 const analyzer = new CodebaseAnalyzerService();
@@ -428,6 +430,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["selector"]
         }
+      },
+      {
+        name: "execute_sandbox_code",
+        description: "TURBO MODE: Execute a JavaScript snippet inside a secure V8 sandbox on the MCP server. The script has access to `forge.api.*` methods that call internal server services (like DOM inspection, codebase analysis) and can process data locally, returning ONLY the final result. This drastically reduces token usage by avoiding large payloads in the LLM context window. Available APIs: forge.api.inspectDom(url), forge.api.analyzeCodebase(projectRoot), forge.api.runTests(projectRoot), forge.api.readFile(filePath), forge.api.getConfig(projectRoot). Use console.log() for debugging (captured and returned).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            script: { type: "string", description: "The JavaScript code to execute. Use `return` to send a value back. Use `await forge.api.*()` to call server services. Keep scripts focused and small." },
+            timeoutMs: { type: "number", description: "Optional execution timeout in milliseconds. Default: 10000 (10s)." }
+          },
+          required: ["script"],
+        },
       }
     ],
   };
@@ -898,6 +912,53 @@ h3. Next Steps
         fs.writeFileSync(filePath, md, 'utf8');
 
         return { content: [{ type: "text", text: `✅ Team Knowledge successfully exported to ${filePath}.\nCommit this to your repository to share with the team!` }] };
+      }
+
+      case "execute_sandbox_code": {
+        const { script, timeoutMs } = args as any;
+
+        // Build the API registry — expose safe server services to the sandbox
+        const apiRegistry: SandboxApiRegistry = {
+          inspectDom: async (url: string) => {
+            return await domInspector.inspect(url);
+          },
+          analyzeCodebase: async (projectRoot: string) => {
+            return await analyzer.analyze(projectRoot);
+          },
+          runTests: async (projectRoot: string) => {
+            const config = mcpConfig.read(projectRoot);
+            return await runner.runTests(projectRoot, undefined, config.testRunTimeout);
+          },
+          readFile: async (filePath: string) => {
+            if (!fs.existsSync(filePath)) return null;
+            return fs.readFileSync(filePath, 'utf8');
+          },
+          getConfig: async (projectRoot: string) => {
+            return mcpConfig.read(projectRoot);
+          },
+          summarizeSuite: async (projectRoot: string) => {
+            return suiteSummary.summarize(projectRoot);
+          },
+        };
+
+        const sandboxResult = await executeSandbox(script, apiRegistry, { timeoutMs });
+
+        if (sandboxResult.success) {
+          let responseText = '';
+          if (sandboxResult.logs.length > 0) {
+            responseText += `[Sandbox Logs]\n${sandboxResult.logs.join('\n')}\n\n`;
+          }
+          responseText += typeof sandboxResult.result === 'string'
+            ? sandboxResult.result
+            : JSON.stringify(sandboxResult.result, null, 2);
+          responseText += `\n\n⏱️ Executed in ${sandboxResult.durationMs}ms`;
+          return { content: [{ type: "text", text: sanitizeOutput(responseText) }] };
+        } else {
+          return {
+            content: [{ type: "text", text: `❌ SANDBOX ERROR: ${sandboxResult.error}\n\nLogs:\n${sandboxResult.logs.join('\n')}` }],
+            isError: true,
+          };
+        }
       }
 
       default:
