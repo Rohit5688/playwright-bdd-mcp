@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { ITestRunner, TestRunnerResult } from '../interfaces/ITestRunner.js';
@@ -15,13 +17,36 @@ const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
  * Phase 35b: Per-run timeout is config-driven via mcp-config.json (testRunTimeout).
  */
 export class TestRunnerService implements ITestRunner {
-  public async runTests(projectRoot: string, specificTestArgs?: string, timeoutMs?: number): Promise<TestRunnerResult> {
+  public async runTests(
+    projectRoot: string, 
+    specificTestArgs?: string, 
+    timeoutMs?: number,
+    executionCommand?: string
+  ): Promise<TestRunnerResult> {
     const runTimeout = timeoutMs ?? DEFAULT_TIMEOUT_MS;
     try {
       // Phase 35: Sanitize user-supplied arguments before shell interpolation
       const safeArgs = specificTestArgs ? sanitizeShellArg(specificTestArgs) : '';
-      const command = `npx bddgen && npx playwright test ${safeArgs}`;
-      const { stdout, stderr } = await execAsync(command, {
+      
+      let command = 'npx bddgen && npx playwright test';
+      
+      if (executionCommand) {
+        command = executionCommand;
+      } else {
+        // Auto-detect package manager locally if no custom executionCommand provided
+        if (fs.existsSync(path.join(projectRoot, 'yarn.lock'))) {
+          command = 'yarn bddgen && yarn playwright test';
+        } else if (fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'))) {
+          command = 'pnpm bddgen && pnpm exec playwright test';
+        }
+      }
+      const isNpmRun = command.trim().startsWith('npm run');
+      const needsSeparator = isNpmRun && safeArgs;
+      const argsToAppend = (needsSeparator && !command.includes(' -- ')) ? `-- ${safeArgs}` : safeArgs;
+
+      const fullCommand = `${command} ${argsToAppend}`.trim();
+
+      const { stdout, stderr } = await execAsync(fullCommand, {
         cwd: projectRoot,
         timeout: runTimeout,
       });

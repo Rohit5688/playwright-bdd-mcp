@@ -19,9 +19,10 @@ Safely manages local `.env` values without leaking secrets to the LLM context.
 
 ## `manage_config`
 Generates an `mcp-config.json` inside your root directory. This configures heuristics like the default Base Page wrapper, global test timeouts, or extra directories for payload scanning.
+*   **Custom Environments**: Overriding the `testRunTimeout` or setting an `executionCommand` (e.g. `yarn test:e2e --`) allows seamless integration into mature monolithic NPM structures without relying on raw `npx`.
 
 **Example Prompt to AI:**
-> *"Set my MCP configuration so the default test timeout is 60000ms and the `customWrapperPackage` is set to `@my-company/qa-core`."*
+> *"Set my MCP configuration so the default test timeout is 60000ms, the `customWrapperPackage` is set to `@my-company/qa-core`, and map my run command to `yarn run test:e2e --`."*
 
 ## `manage_users`
 Testing applications often requires multiple user roles (Admin, Editor, Viewer). This tool scaffolds `test-data/users.json` with multi-environment credential support, storing the file safely in `.gitignore`.

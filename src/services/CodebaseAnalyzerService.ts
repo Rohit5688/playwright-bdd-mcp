@@ -152,11 +152,44 @@ RULES FOR AI:
         }
       }
 
+      // 6b. Parse tsconfig.json for Path Aliasing
+      const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
+      if (await this.fileExists(tsconfigPath)) {
+        try {
+          const content = await fs.readFile(tsconfigPath, 'utf8');
+          // Strip comments before parsing
+          const stripped = content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
+          const tsconfig = JSON.parse(stripped);
+          if (tsconfig.compilerOptions?.paths) {
+            result.importAliases = tsconfig.compilerOptions.paths;
+          }
+        } catch(e) { }
+      }
+
+      // 6c. Parse package.json for Execution Scripts
+      const packageJsonPath = path.join(projectRoot, 'package.json');
+      if (await this.fileExists(packageJsonPath)) {
+        try {
+           const pkgContent = await fs.readFile(packageJsonPath, 'utf8');
+           const pkg = JSON.parse(pkgContent);
+           if (pkg.scripts) {
+             result.packageScripts = pkg.scripts;
+           }
+        } catch(e) {}
+      }
+
       // 7. Discover existing Env Files
-      const rootFiles = await fs.readdir(projectRoot);
+      let rootFiles: string[] = [];
+      try { rootFiles = await fs.readdir(projectRoot); } catch(e) {}
       const envFiles = rootFiles.filter(f => f.startsWith('.env') && !f.endsWith('.example'));
+      let hasCustomConfigDir = false;
+      try {
+         const configStat = await fs.stat(path.join(projectRoot, 'config'));
+         if (configStat.isDirectory()) hasCustomConfigDir = true;
+      } catch { }
+
       result.envConfig = {
-        present: envFiles.length > 0,
+        present: envFiles.length > 0 || hasCustomConfigDir,
         files: envFiles,
         keys: []
       };
@@ -356,19 +389,39 @@ RULES FOR AI:
    */
   private extractPublicMethods(content: string): string[] {
     const methods: string[] = [];
-    // Captures the method name in group 1, and the arguments inside the parens in group 2
+    // 1. Captures class methods and standard object literal methods
     const regex = /(?:public\s+)?(?:async\s+)?([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?::\s*[^{]+)?\s*\{/g;
     let match;
     while ((match = regex.exec(content)) !== null) {
       const name = match[1];
       if (!name) continue;
-      const args = (match[2] || '').trim().replace(/\s+/g, ' '); // Normalize newlines in args
-      
-      // Ignore typical keywords/constructors
+      const args = (match[2] || '').trim().replace(/\s+/g, ' '); 
       if (['constructor', 'if', 'while', 'for', 'switch', 'catch', 'function'].includes(name)) continue;
-      
       methods.push(`${name}(${args})`);
     }
+
+    // 2. Captures arrow functions assigned to properties/constants: `myMethod: async (arg) =>` or `export const myMethod = (arg) =>`
+    const arrowRegex = /(?:export\s+(?:const|let|var)\s+)?([a-zA-Z0-9_]+)\s*[:=]\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>/g;
+    let matchArrow;
+    while ((matchArrow = arrowRegex.exec(content)) !== null) {
+      const name = matchArrow[1];
+      if (name && !methods.some(m => m.startsWith(name + '('))) {
+        methods.push(`${name}()`); // simplified args for arrow functions
+      }
+    }
+
+    // 3. Captures standard exported functions: `export function myMethod(arg)`
+    const fnRegex = /export\s+(?:async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/g;
+    let matchFn;
+    while ((matchFn = fnRegex.exec(content)) !== null) {
+       const name = matchFn[1];
+       if (!name) continue;
+       const args = (matchFn[2] || '').trim().replace(/\s+/g, ' ');
+       if (!methods.some(m => m.startsWith(name + '('))) {
+         methods.push(`${name}(${args})`);
+       }
+    }
+
     return methods;
   }
   /**

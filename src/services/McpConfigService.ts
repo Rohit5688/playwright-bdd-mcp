@@ -100,6 +100,12 @@ export interface McpConfig {
    * Path where accessibility violation reports should be saved.
    */
   a11yReportPath: string;
+
+  /**
+   * Optional custom execution command. If provided, overrides the default test runner command.
+   * Example: "npm run test:e2e --" or "yarn e2e --"
+   */
+  executionCommand?: string;
 }
 
 export const DEFAULT_CONFIG: McpConfig = {

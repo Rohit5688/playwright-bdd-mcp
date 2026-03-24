@@ -61,8 +61,21 @@ export class TestGenerationService implements ITestGenerator {
       ...(analysisResult.customWrapper ? [
         `Custom Wrapper (${analysisResult.customWrapper.package}): ${analysisResult.customWrapper.isInstalled ? analysisResult.customWrapper.detectedMethods.join(', ') : 'Not Installed/Resolved'}`,
       ] : []),
+      ...(analysisResult.importAliases && Object.keys(analysisResult.importAliases).length > 0 ? [
+        "\n--- TypeScript Import Aliases (tsconfig.json paths) ---",
+        `Do NOT use deep relative paths (e.g. '../../pages/MyPage.ts') if an alias exists. You MUST map imports to these aliases:`,
+        JSON.stringify(analysisResult.importAliases, null, 2)
+      ] : []),
       archNotes ? `\n--- ARCHITECTURE NOTES (Item 11: FOLLOW THESE) ---\n${archNotes}` : ''
     ];
+
+    const envStrategyRule = analysisResult.envConfig?.present 
+       ? "Assume the project uses a `.env` file (e.g., `process.env.BASE_URL`). Use Playwright's `baseURL` config or `dotenv` rather than hardcoding."
+       : "Assume the project manages configuration dynamically (e.g., via a `config/` directory, custom module, or Playwright projects). Infer the config import from context and use IT rather than hardcoding.";
+
+    const dotenvImportRule = analysisResult.envConfig?.present
+       ? "14. Environment Variables: Every generated Page Object file MUST start with `import 'dotenv/config';` as the very first line, so `process.env.*` values from `.env` are available at runtime."
+       : "14. Environment Variables: Do NOT inject `import 'dotenv/config';`. Use the project's native configuration strategy as inferred from existing Page Objects or Utility helpers.";
 
     let instructContent = `[SYSTEM INSTRUCTION: MCP TEST GENERATION]
 You are a highly capable QA automation engineer.
@@ -87,7 +100,7 @@ ${analysisResult.existingTestData ? [...analysisResult.existingTestData.payloads
 2. Step definitions MUST NEVER contain raw Playwright calls (e.g., page.locator). They must strictly call Page Object Model methods.
 3. Reuse existing POM methods from the context above whenever possible. Avoid duplicating existing logic.
 4. Semantic Step Matching & Fuzzy Adaptation: If your intent is semantically similar to an "Existing Step Pattern" listed above (e.g. "I press login" vs "I click login button"), you MUST REWRITE your requested step in the \`.feature\` file to exactly match the existing step definition. Do NOT create a duplicate step definition.
-5. Environments & URLs: Do NOT hardcode sensitive URLs or credentials in your steps. Assume the project uses a \`.env\` file (e.g., \`process.env.BASE_URL\`). Use Playwright's \`baseURL\` config or \`dotenv\` rather than hardcoding.
+5. Environments & URLs: Do NOT hardcode sensitive URLs or credentials in your steps. ${envStrategyRule}
 6. Custom Wrapper Enforcement: If a \`Custom Wrapper\` is present in the context above, you MUST import and extend it for any newly generated Page Objects. Furthermore, you MUST explicitly prefer using the Wrapper's exposed methods (for navigation, clicking, typing, asserting) over native Playwright APIs (\`this.page.click()\`, \`expect()\`) whenever the wrapper provides a suitable abstraction. If the wrapper wasn't resolved (see WARNING in context), try to guess its API based on typical patterns, or fallback to native Playwright APIs while aggressively commenting in the generated code that the user needs to install the missing package.
 7. Asynchronous Auto-Waiting: Unless handled by a Custom Wrapper, Page Object methods MUST use Playwright's web-first assertions (e.g. \`await expect(this.btn).toBeVisible()\`) to prevent race conditions during page transitions.
 8. Data-Driven Testing: Default to generating Gherkin \`Scenario Outline:\` with an \`Examples:\` data table when dealing with user inputs, rather than hardcoding static data inside the steps.
@@ -100,8 +113,7 @@ ${analysisResult.existingTestData ? [...analysisResult.existingTestData.payloads
     - Form submission, data entry, CRUD = second tag in the list
     - Full end-to-end user journeys = last tag in the list
     Tags must appear on the line directly above \`Scenario:\` or \`Scenario Outline:\`.
-14. Environment Variables: Every generated Page Object file MUST start with \`import 'dotenv/config';\` as the very first line, so \`process.env.*\` values from \`.env\` are available at runtime.
-    Use \`process.env.BASE_URL\` instead of hardcoded URLs wherever possible.
+${dotenvImportRule}
 15. Page Load Waits: After any navigation, use \`await this.page.waitForLoadState('${waitStrategy}')\` as the standard wait strategy for this project.
 16. Multi-Tab Interactions: If an action opens a new browser tab, you MUST use \`const [newPage] = await Promise.all([this.page.context().waitForEvent('page'), <action>])\`. Pass this \`newPage\` to subsequent Page Objects instead of the original page. To return to the main window, use \`await this.page.bringToFront()\` and resume using the original page object.
 17. API Interception & Capturing: For mocking APIs, use \`await this.page.route('**/endpoint', ...)\` BEFORE the action. For capturing API responses, use \`const [response] = await Promise.all([this.page.waitForResponse('**/api/*'), actionThatTriggersIt()]);\` to prevent race conditions. Share captured data across steps using module-level variables.
@@ -120,6 +132,7 @@ ${analysisResult.existingTestData ? [...analysisResult.existingTestData.payloads
 25. POM Enforcement for Wrappers: Even if a Custom Wrapper provides high-level actions (like \`BasePage.clickButton()\`), you MUST still generate a project-specific Page Object class (e.g., \`pages/LoginPage.ts\` extending \`BasePage\`) and encapsulate the UI logic in specific methods (e.g., \`submitLogin()\`). Step definitions MUST NEVER instantiate and call the wrapper class directly (to prevent "direct-to-wrapper" anti-pattern).
 26. Test Data Reuse Excellence: You MUST prioritize reusing the existing test data structures provided in context. If a similar data shape exists, use it via \`fs.readFileSync\` or dynamic imports instead of generating new mock JSON files or interfaces.
 27. Automated Accessibility: If the user description mentions "accessibility", "WCAG", "a11y", or "compliance", or if it's a critical page transition, you MUST include a \`Then I check accessibility of the page\` step. This maps to \`await pageObject.checkAccessibility()\` which is inherited from \`BasePage\`.
+28. TSConfig Autowiring: If your implementation creates a NEW top-level architectural directory (e.g., \`models/\`, \`types/\`, \`helpers/\`), you MUST also actively update \`tsconfig.json\` in the target project via standard file editing tools. You must append the corresponding path alias (e.g., \`"@models/*": ["./models/*"]\`) to \`compilerOptions.paths\`, and ENSURE your newly generated TypeScript files strictly use that alias in their imports.
 
 ${memoryPrompt}
 
