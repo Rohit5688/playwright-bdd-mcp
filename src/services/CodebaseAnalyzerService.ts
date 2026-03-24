@@ -38,54 +38,52 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
         result.bddSetup.configFile = 'playwright.config.ts';
       }
 
-      // 2. Discover Features
-      const featuresDir = path.join(projectRoot, 'features');
-      let featureFiles: string[] = [];
-      if (await this.directoryExists(featuresDir)) {
-        featureFiles = await this.readAllFiles(featuresDir, '.feature');
-        result.existingFeatures = featureFiles.map(f => path.relative(projectRoot, f));
-      }
+      // 2. Discover Features dynamically across the workspace
+      const featureFiles = await this.readAllFiles(projectRoot, '.feature');
+      result.existingFeatures = featureFiles.map(f => path.relative(projectRoot, f));
 
-      // 3. Discover Step Definitions
-      const stepsDir = path.join(projectRoot, 'step-definitions');
-      if (await this.directoryExists(stepsDir)) {
-        const files = await this.readAllFiles(stepsDir, '.ts');
-        result.existingStepDefinitions = await Promise.all(files.map(async f => {
-          const content = await fs.readFile(f, 'utf8');
-          return {
+      // 3 & 4. Discover TypeScript Files (Step Definitions and Page Objects)
+      const tsFiles = await this.readAllFiles(projectRoot, '.ts');
+      const stepDefs: any[] = [];
+      const pageObjs: any[] = [];
+      
+      for (const f of tsFiles) {
+        if (f.includes('node_modules') || f.includes('playwright.config') || f.includes('mcp-config')) continue;
+        const content = await fs.readFile(f, 'utf8');
+        
+        // Look for step definitions
+        const steps = this.extractSteps(content);
+        if (steps.length > 0) {
+          stepDefs.push({
             file: path.relative(projectRoot, f),
-            steps: this.extractSteps(content)
-          };
-        }));
-      }
-
-      // 4. Discover Page Objects and naive introspection
-      const pagesDir = path.join(projectRoot, 'pages');
-      let pageFiles: string[] = [];
-      if (await this.directoryExists(pagesDir)) {
-        pageFiles = await this.readAllFiles(pagesDir, '.ts');
-        result.existingPageObjects = await Promise.all(pageFiles.map(async f => {
-          const content = await fs.readFile(f, 'utf8');
-          const methods = this.extractPublicMethods(content);
-          
-          // Basic custom wrapper check fallback if no explicit package provided
+            steps
+          });
+        }
+        
+        // Look for page objects or base classes
+        const methods = this.extractPublicMethods(content);
+        if (methods.length > 0) {
+          // Check for custom wrapper override
           if (!customWrapperPackage && path.basename(f) === 'BasePage.ts') {
             result.customWrapper = {
               package: 'local BasePage',
               detectedMethods: methods
             };
           }
-          return {
+          pageObjs.push({
             path: path.relative(projectRoot, f),
             publicMethods: methods
-          };
-        }));
+          });
+        }
       }
+      
+      result.existingStepDefinitions = stepDefs;
+      result.existingPageObjects = pageObjs;
 
       // Extract Naming Conventions based on discovered files
       result.namingConventions = {
         features: this.detectNamingConvention(featureFiles, '.feature'),
-        pages: this.detectNamingConvention(pageFiles, '.ts')
+        pages: this.detectNamingConvention(tsFiles.filter(f => f.toLowerCase().includes('page')), '.ts')
       };
 
       // 5. Explicit Custom Wrapper handling
@@ -310,6 +308,8 @@ RULES FOR AI:
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
+        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git' || entry.name === 'playwright-report') continue;
+        
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           results = results.concat(await this.readAllFiles(fullPath, extension));
