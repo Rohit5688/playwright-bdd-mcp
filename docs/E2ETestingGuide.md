@@ -13,7 +13,7 @@ This guide walks you through testing every feature of TestForge as an end user.
   "mcpServers": {
     "testforge": {
       "command": "node",
-      "args": ["/absolute/path/to/playwright-bdd-pom-mcp/build/index.js"]
+      "args": ["/absolute/path/to/TestForge/build/index.js"]
     }
   }
 }

@@ -143,7 +143,7 @@ export class EnvManagerService {
   /** Serializes the key-value map back to .env file format */
   private persistEnvFile(filePath: string, values: Record<string, string>) {
     const lines = [
-      '# Auto-managed by playwright-bdd-pom-mcp',
+      '# Auto-managed by TestForge',
       '# DO NOT commit this file — it may contain real credentials.',
       '',
       ...Object.entries(values).map(([k, v]) => `${k}=${v}`),

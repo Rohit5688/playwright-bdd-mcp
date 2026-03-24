@@ -32,7 +32,7 @@ Before finalizing your setup, review this questionnaire. These values control ho
 | **`basePageClass`** | Do you use a custom wrapper? | `"@company/test-toolkit"` or `"./pages/BasePage.ts"` |
 | **`testRunTimeout`** | Max time for a full run? | `120000` (2 mins) for standard; `300000` (5 mins) for heavy apps. |
 | **`projectRoot`** | Where is your actual code? | Absolute path if your VS Code workspace is at a higher level than your tests. |
-| **`a11yStandards`** | Which standards to test? | `["wcag2aa", "wcag21aa"]` (See [Accessibility Guide](file:///c:/Users/Rohit/mcp/playwright-bdd-pom-mcp/docs/Accessibility.md)) |
+| **`a11yStandards`** | Which standards to test? | `["wcag2aa", "wcag21aa"]` (See [Accessibility Guide](Accessibility.md)) |
 
 ### Example Config Table
 | Need | setting | value |

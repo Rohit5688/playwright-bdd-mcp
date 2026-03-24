@@ -7,7 +7,7 @@ The Playwright-BDD MCP Server is fully dockerized. Using the official Playwright
 ## 🛠️ 0. Prerequisites
 
 Before you begin, ensure you have the following installed on your machine or deployment environment:
-1. **GitHub Repository**: You need access to the `playwright-bdd-pom-mcp` source code.
+1. **GitHub Repository**: You need access to the `TestForge` source code.
 2. **Docker Engine**: Installed and running (e.g., [Docker Desktop](https://www.docker.com/products/docker-desktop/)).
    * *Verify with:* `docker --version`
 3. **Git**: Required to clone the codebase.

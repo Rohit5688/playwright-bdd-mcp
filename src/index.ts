@@ -57,7 +57,7 @@ const sessionService = new PlaywrightSessionService();
 
 const server = new Server(
   {
-    name: "playwright-bdd-pom-mcp",
+    name: "TestForge",
     version: "1.0.0",
   },
   {

@@ -71,7 +71,7 @@ Add the local server to your MCP Client settings:
   "mcpServers": {
     "testforge": {
       "command": "node",
-      "args": ["/absolute/path/to/playwright-bdd-pom-mcp/build/index.js"]
+      "args": ["/absolute/path/to/TestForge/dist/index.js"]
     }
   }
 }
