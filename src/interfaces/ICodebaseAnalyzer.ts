@@ -50,6 +50,12 @@ export interface CodebaseAnalysisResult {
   unusedPomMethods?: Array<{ path: string; unusedMethods: string[] }>;
   duplicateInstallWarnings?: string[];
   mcpLearnDirectives?: string[];
+  detectedPaths: {
+    featuresRoot: string;
+    stepsRoot: string;
+    pagesRoot: string;
+    utilsRoot: string;
+  };
   recommendation: string;
 }
 

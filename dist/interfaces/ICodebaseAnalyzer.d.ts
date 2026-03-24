@@ -62,6 +62,12 @@ export interface CodebaseAnalysisResult {
     }>;
     duplicateInstallWarnings?: string[];
     mcpLearnDirectives?: string[];
+    detectedPaths: {
+        featuresRoot: string;
+        stepsRoot: string;
+        pagesRoot: string;
+        utilsRoot: string;
+    };
     recommendation: string;
 }
 export interface ICodebaseAnalyzer {

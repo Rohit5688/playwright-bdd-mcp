@@ -442,6 +442,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const config = mcpConfig.read(projectRoot);
                 const resolvedWrapper = customWrapperPackage || config.basePageClass;
                 const analysis = await analyzer.analyze(projectRoot, resolvedWrapper);
+                // Auto-heal the local workspace memory so generators never guess the wrong path
+                try {
+                    config.dirs = {
+                        ...config.dirs,
+                        features: analysis.detectedPaths.featuresRoot,
+                        pages: analysis.detectedPaths.pagesRoot,
+                        stepDefinitions: analysis.detectedPaths.stepsRoot,
+                    };
+                    mcpConfig.write(projectRoot, config);
+                }
+                catch (e) {
+                    // Ignore write fails if config is in a read-only state or doesn't exist
+                }
                 // Supplementary metadata for the LLM prompt
                 analysis.mcpConfig = {
                     version: config.version || '0.0.0',
@@ -470,6 +483,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (!lastAnalysisResult) {
                     lastAnalysisResult = await analyzer.analyze(projectRoot, resolvedWrapper);
                 }
+                try {
+                    config.dirs = {
+                        ...config.dirs,
+                        features: lastAnalysisResult.detectedPaths.featuresRoot,
+                        pages: lastAnalysisResult.detectedPaths.pagesRoot,
+                        stepDefinitions: lastAnalysisResult.detectedPaths.stepsRoot,
+                    };
+                    mcpConfig.write(projectRoot, config);
+                }
+                catch (e) { }
                 const memoryPrompt = learningService.getKnowledgePromptInjection(projectRoot, lastAnalysisResult.mcpLearnDirectives);
                 const instruction = await generator.generatePromptInstruction(testDescription, projectRoot, lastAnalysisResult, resolvedWrapper, baseUrl, memoryPrompt);
                 return { content: [{ type: "text", text: instruction }] };

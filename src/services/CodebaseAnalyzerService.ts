@@ -15,6 +15,12 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
         features: 'kebab-case.feature',
         pages: 'PascalCase.ts'
       },
+      detectedPaths: {
+        featuresRoot: 'features',
+        stepsRoot: 'step-definitions',
+        pagesRoot: 'pages',
+        utilsRoot: 'utils'
+      },
       recommendation: ''
     };
 
@@ -41,6 +47,10 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
       // 2. Discover Features dynamically across the workspace
       const featureFiles = await this.readAllFiles(projectRoot, '.feature');
       result.existingFeatures = featureFiles.map(f => path.relative(projectRoot, f));
+      const firstFeature = featureFiles[0];
+      if (firstFeature) {
+        result.detectedPaths.featuresRoot = path.dirname(path.relative(projectRoot, firstFeature));
+      }
 
       // 3 & 4. Discover TypeScript Files (Step Definitions and Page Objects)
       const tsFiles = await this.readAllFiles(projectRoot, '.ts');
@@ -54,15 +64,18 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
         // Look for step definitions
         const steps = this.extractSteps(content);
         if (steps.length > 0) {
+          const relPath = path.relative(projectRoot, f);
           stepDefs.push({
-            file: path.relative(projectRoot, f),
+            file: relPath,
             steps
           });
+          if (result.detectedPaths.stepsRoot === 'step-definitions') result.detectedPaths.stepsRoot = path.dirname(relPath);
         }
         
         // Look for page objects or base classes
         const methods = this.extractPublicMethods(content);
         if (methods.length > 0) {
+          const relPath = path.relative(projectRoot, f);
           // Check for custom wrapper override
           if (!customWrapperPackage && path.basename(f) === 'BasePage.ts') {
             result.customWrapper = {
@@ -71,9 +84,10 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
             };
           }
           pageObjs.push({
-            path: path.relative(projectRoot, f),
+            path: relPath,
             publicMethods: methods
           });
+          if (result.detectedPaths.pagesRoot === 'pages') result.detectedPaths.pagesRoot = path.dirname(relPath);
         }
       }
       
