@@ -16,6 +16,13 @@ const execAsync = promisify(exec);
 export class ProjectSetupService {
     envManager = new EnvManagerService();
     async setup(projectRoot) {
+        // PRE-CHECK: Prevent overwriting mature projects
+        const criticalFiles = ['playwright.config.ts', 'playwright.config.js', 'package.json'];
+        const existing = criticalFiles.filter(f => fs.existsSync(path.join(projectRoot, f)));
+        if (existing.length > 0) {
+            throw new Error(`[TestForge] SAFETY HALT: Existing configurations detected (${existing.join(', ')}). ` +
+                `This tool ONLY initializes brand-new projects. Do not run this on existing repositories.`);
+        }
         const dirsCreated = [];
         const filesCreated = [];
         // 1. Ensure root exists

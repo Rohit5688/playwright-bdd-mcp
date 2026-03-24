@@ -66,7 +66,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         tools: [
             {
                 name: "analyze_codebase",
-                description: "Analyzes an existing codebase to detect Playwright-BDD features, step definitions, and Page Objects. Always run this before test generation to ensure smart reuse.",
+                description: "⚠️ TOKEN-INTENSIVE (LEGACY): Analyzes the entire codebase. Only use this for very small projects (< 5 files). FOR LARGE PROJECTS, ALWAYS USE 'execute_sandbox_code' (Turbo Mode) instead to save up to 98% in tokens.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -419,7 +419,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "execute_sandbox_code",
-                description: "TURBO MODE: Execute a JavaScript snippet inside a secure V8 sandbox on the MCP server. The script has access to `forge.api.*` methods that call internal server services (like DOM inspection, codebase analysis) and can process data locally, returning ONLY the final result. This drastically reduces token usage by avoiding large payloads in the LLM context window. Available APIs: forge.api.inspectDom(url), forge.api.analyzeCodebase(projectRoot), forge.api.runTests(projectRoot), forge.api.readFile(filePath), forge.api.getConfig(projectRoot). Use console.log() for debugging (captured and returned).",
+                description: "🚀 TURBO MODE (RECOMMENDED): Execute a JavaScript snippet inside a secure V8 sandbox to analyze code, find existing steps, or inspect DOMs. Use this tool FOR ALL RESEARCH AND ANALYSIS tasks to prevent token overflow. The script has access to `forge.api.*` and returns only the filtered data you need. Available APIs: forge.api.inspectDom(url), forge.api.analyzeCodebase(projectRoot), forge.api.runTests(projectRoot).",
                 inputSchema: {
                     type: "object",
                     properties: {
