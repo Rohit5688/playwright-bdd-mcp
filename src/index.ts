@@ -30,6 +30,7 @@ import { LearningService } from "./services/LearningService.js";
 import { PipelineService } from "./services/PipelineService.js";
 import { PlaywrightSessionService } from "./services/PlaywrightSessionService.js";
 import { ASTScrutinizer } from "./utils/ASTScrutinizer.js";
+import { JsonToPomTranspiler, type JsonPageObject } from "./utils/JsonToPomTranspiler.js";
 import type { CodebaseAnalysisResult } from "./interfaces/ICodebaseAnalyzer.js";
 import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
 import { executeSandbox } from "./services/SandboxEngine.js";
@@ -186,6 +187,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                   content: { type: "string" }
                 },
                 required: ["path", "content"]
+              }
+            },
+            jsonPageObjects: {
+              type: "array",
+              description: "Optional structured JSON representations of Page Objects (bypasses raw TS formatting).",
+              items: {
+                type: "object",
+                properties: {
+                  className: { type: "string" },
+                  path: { type: "string" },
+                  extendsClass: { type: "string" },
+                  imports: { type: "array", items: { type: "string" } },
+                  locators: { type: "array", items: { type: "object" } },
+                  methods: { type: "array", items: { type: "object" } }
+                },
+                required: ["className", "path"]
               }
             },
             pageUrl: { type: "string", description: "Optional URL used to re-inspect the DOM during self-healing retries." },
@@ -581,10 +598,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "validate_and_write": {
-        const { projectRoot, files, pageUrl, dryRun } = args as any;
+        let { projectRoot, files, jsonPageObjects, pageUrl, dryRun } = args as any;
         const MAX_RETRIES = 3;
         const currentAttempt = (retrySessionMap.get(projectRoot) ?? 0) + 1;
         retrySessionMap.set(projectRoot, currentAttempt);
+
+        // Phase 4.2: JSON-Structured Code Generation
+        // Transpile incoming JSON POMs and inject them into standard files array
+        if (jsonPageObjects && Array.isArray(jsonPageObjects)) {
+           for (const jsonPom of jsonPageObjects as JsonPageObject[]) {
+             if (jsonPom.className && jsonPom.path) {
+                const generatedContent = JsonToPomTranspiler.transpile(jsonPom);
+                files.push({
+                   path: jsonPom.path,
+                   content: generatedContent
+                });
+             }
+           }
+        }
 
         // Phase 4.1: AST "Laziness" Scanner (Zero-Trust Enforcement)
         try {

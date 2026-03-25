@@ -147,7 +147,7 @@ ${memoryPrompt}
 - In your explanation string, remind the user that they must run \`npx bddgen\` to generate the test files, followed by \`npx playwright test\`.
 
 --- OUTPUT SCHEMA ---
-Your entire response must be a single JSON object with this shape:
+Your entire response must be a single JSON object with this shape. DO NOT write raw TypeScript strings for Page Objects. You MUST output Page Objects exclusively in the \`jsonPageObjects\` array to avoid syntactical/formatting hallucinations. The MCP server will generate the TypeScript files for you.
 {
   "files": [
     {
@@ -157,10 +157,20 @@ Your entire response must be a single JSON object with this shape:
     {
       "path": "step-definitions/new-steps.ts",
       "content": "import { createBdd } from 'playwright-bdd';...\\n"
-    },
+    }
+  ],
+  "jsonPageObjects": [
     {
+      "className": "NewPage",
       "path": "pages/NewPage.ts",
-      "content": "import { BasePage } from '...';\\n..."
+      "extendsClass": "BasePage",
+      "imports": ["import { BasePage } from './BasePage';"],
+      "locators": [
+         { "name": "submitBtn", "selector": "#submit" }
+      ],
+      "methods": [
+         { "name": "submit", "args": [], "body": ["await this.submitBtn.click();"] }
+      ]
     }
   ],
   "setupRequired": ${!analysisResult.bddSetup.present},
