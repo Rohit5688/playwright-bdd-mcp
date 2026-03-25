@@ -40,8 +40,8 @@ export class TestRunnerService implements ITestRunner {
           command = 'pnpm bddgen && pnpm exec playwright test';
         }
       }
-      const isNpmRun = command.trim().startsWith('npm run');
-      const needsSeparator = isNpmRun && safeArgs;
+      const isPackageRunner = /^(npm|yarn|pnpm|bun)\s+run\b/.test(command.trim());
+      const needsSeparator = isPackageRunner && safeArgs;
       const argsToAppend = (needsSeparator && !command.includes(' -- ')) ? `-- ${safeArgs}` : safeArgs;
 
       const fullCommand = `${command} ${argsToAppend}`.trim();

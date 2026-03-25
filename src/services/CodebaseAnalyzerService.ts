@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { Project, SyntaxKind, Node } from 'ts-morph';
 import type { ICodebaseAnalyzer, CodebaseAnalysisResult } from '../interfaces/ICodebaseAnalyzer.js';
 import { McpConfigService, DEFAULT_CONFIG } from './McpConfigService.js';
 
@@ -46,10 +47,10 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
 
       // 2. Discover Features dynamically across the workspace
       const featureFiles = await this.readAllFiles(projectRoot, '.feature');
-      result.existingFeatures = featureFiles.map(f => path.relative(projectRoot, f));
+      result.existingFeatures = featureFiles.map(f => path.relative(projectRoot, f).replace(/\\/g, '/'));
       const firstFeature = featureFiles[0];
       if (firstFeature) {
-        result.detectedPaths.featuresRoot = path.dirname(path.relative(projectRoot, firstFeature));
+        result.detectedPaths.featuresRoot = path.dirname(path.relative(projectRoot, firstFeature).replace(/\\/g, '/'));
       }
 
       // 3 & 4. Discover TypeScript Files (Step Definitions and Page Objects)
@@ -57,37 +58,99 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
       const stepDefs: any[] = [];
       const pageObjs: any[] = [];
       
-      for (const f of tsFiles) {
-        if (f.includes('node_modules') || f.includes('playwright.config') || f.includes('mcp-config')) continue;
-        const content = await fs.readFile(f, 'utf8');
-        
-        // Look for step definitions
-        const steps = this.extractSteps(content);
-        if (steps.length > 0) {
-          const relPath = path.relative(projectRoot, f);
-          stepDefs.push({
-            file: relPath,
-            steps
-          });
-          if (result.detectedPaths.stepsRoot === 'step-definitions') result.detectedPaths.stepsRoot = path.dirname(relPath);
+      if (tsFiles.length > 0) {
+        const project = new Project({ compilerOptions: { strict: false }, skipAddingFilesFromTsConfig: true });
+        for (const f of tsFiles) {
+          if (f.includes('node_modules') || f.includes('playwright.config') || f.includes('mcp-config') || f.endsWith('d.ts')) continue;
+          project.addSourceFileAtPath(f);
         }
-        
-        // Look for page objects or base classes
-        const methods = this.extractPublicMethods(content);
-        if (methods.length > 0) {
-          const relPath = path.relative(projectRoot, f);
+
+        for (const sourceFile of project.getSourceFiles()) {
+          const filePath = sourceFile.getFilePath();
+          const relPath = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+          const content = sourceFile.getFullText();
+
+          // Look for step definitions (using Regex for strict BDD steps to match Playwright-BDD structure)
+          const steps = this.extractSteps(content);
+          if (steps.length > 0) {
+            stepDefs.push({ file: relPath, steps });
+            if (result.detectedPaths.stepsRoot === 'step-definitions') result.detectedPaths.stepsRoot = path.dirname(relPath);
+            continue;
+          }
+
+          let isPageObject = false;
+          let fileMethods: string[] = [];
+
+          // Class-based POMs
+          const classes = sourceFile.getClasses();
+          for (const cls of classes) {
+            const className = cls.getName() || '';
+            const isStandardPom = className.toLowerCase().includes('page') || className.toLowerCase().includes('screen');
+            const hasClassLocators = this.hasClassLocatorsFast(content); 
+            if (isStandardPom || hasClassLocators) {
+              const publicMethods = cls.getMethods()
+                .filter(m => !m.hasModifier(SyntaxKind.PrivateKeyword) && !m.hasModifier(SyntaxKind.ProtectedKeyword))
+                .map(m => m.getName() + '()');
+              
+              fileMethods.push(...publicMethods);
+              pageObjs.push({ path: relPath, publicMethods, className: className || 'AnonymousClass' });
+              isPageObject = true;
+            }
+          }
+
+          // Object-literal and Exported arrow function POMs
+          const variableDeclarations = sourceFile.getVariableDeclarations();
+          for (const varDecl of variableDeclarations) {
+            const name = varDecl.getName() || '';
+            const isStandardPom = name.toLowerCase().includes('page') || name.toLowerCase().includes('screen');
+            
+            const publicMethods: string[] = [];
+            let hasLocators = false;
+
+            const initializer = varDecl.getInitializer();
+            if (initializer && Node.isObjectLiteralExpression(initializer)) {
+              const bodyText = initializer.getText();
+              hasLocators = this.hasClassLocatorsFast(bodyText);
+
+              for (const prop of initializer.getProperties()) {
+                if (Node.isMethodDeclaration(prop)) {
+                  publicMethods.push(prop.getName() + '()');
+                } else if (Node.isPropertyAssignment(prop)) {
+                  const propInit = prop.getInitializer();
+                  if (propInit && (Node.isArrowFunction(propInit) || Node.isFunctionExpression(propInit))) {
+                    publicMethods.push(prop.getName() + '()');
+                  }
+                }
+              }
+            } else if (initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))) {
+              // Standalone exported arrow function
+              if (varDecl.isExported()) {
+                 const bodyText = initializer.getText();
+                 hasLocators = this.hasClassLocatorsFast(bodyText);
+                 if (hasLocators || isStandardPom) {
+                   publicMethods.push(name + '()');
+                 }
+              }
+            }
+
+            if (isStandardPom || hasLocators) {
+               fileMethods.push(...publicMethods);
+               pageObjs.push({ path: relPath, publicMethods, className: name || 'AnonymousObject' });
+               isPageObject = true;
+            }
+          }
+          
+          if (isPageObject && result.detectedPaths.pagesRoot === 'pages') {
+             result.detectedPaths.pagesRoot = path.dirname(relPath);
+          }
+
           // Check for custom wrapper override
-          if (!customWrapperPackage && path.basename(f) === 'BasePage.ts') {
+          if (!customWrapperPackage && path.basename(filePath) === 'BasePage.ts' && fileMethods.length > 0) {
             result.customWrapper = {
               package: 'local BasePage',
-              detectedMethods: methods
+              detectedMethods: fileMethods
             };
           }
-          pageObjs.push({
-            path: relPath,
-            publicMethods: methods
-          });
-          if (result.detectedPaths.pagesRoot === 'pages') result.detectedPaths.pagesRoot = path.dirname(relPath);
         }
       }
       
@@ -127,7 +190,7 @@ RULES FOR AI:
             const archDir = path.dirname(fullArchPath);
             if (!await this.directoryExists(archDir)) await fs.mkdir(archDir, { recursive: true });
             await fs.writeFile(fullArchPath, archContent, 'utf-8');
-            result.customWrapper.architectureNotesPath = archNotesPath;
+            result.customWrapper.architectureNotesPath = archNotesPath.replace(/\\/g, '/');
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             console.warn(`Could not write architecture notes: ${msg}`);
@@ -215,7 +278,7 @@ RULES FOR AI:
             const ext = path.extname(f);
             if (!['.json', '.ts', '.js'].includes(ext)) continue;
 
-            const relativePath = path.relative(projectRoot, f);
+            const relativePath = path.relative(projectRoot, f).replace(/\\/g, '/');
             const content = await fs.readFile(f, 'utf8');
             const sampledStructure = this.extractSampleStructure(content, ext);
             
@@ -383,46 +446,53 @@ RULES FOR AI:
     return `camelCase${ext}`;
   }
 
+  private hasClassLocatorsFast(content: string): boolean {
+    return content.includes('page.locator') || content.includes('page.getBy') || content.includes('page.$') || content.includes('page.goto');
+  }
+
   /**
-   * Enhanced regex-based method extraction for TypeScript classes.
-   * Gets `methodName(arg1: string, arg2?: number)` signatures.
+   * Enhanced AST-based method extraction for TypeScript classes using ts-morph.
+   * Leveraged primarily to resolve custom wrapper packages.
    */
   private extractPublicMethods(content: string): string[] {
-    const methods: string[] = [];
-    // 1. Captures class methods and standard object literal methods
-    const regex = /(?:public\s+)?(?:async\s+)?([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?::\s*[^{]+)?\s*\{/g;
-    let match;
-    while ((match = regex.exec(content)) !== null) {
-      const name = match[1];
-      if (!name) continue;
-      const args = (match[2] || '').trim().replace(/\s+/g, ' '); 
-      if (['constructor', 'if', 'while', 'for', 'switch', 'catch', 'function'].includes(name)) continue;
-      methods.push(`${name}(${args})`);
-    }
+    try {
+      const project = new Project({ compilerOptions: { strict: false }, skipAddingFilesFromTsConfig: true });
+      const sourceFile = project.createSourceFile('temp.ts', content);
+      const methods: string[] = [];
 
-    // 2. Captures arrow functions assigned to properties/constants: `myMethod: async (arg) =>` or `export const myMethod = (arg) =>`
-    const arrowRegex = /(?:export\s+(?:const|let|var)\s+)?([a-zA-Z0-9_]+)\s*[:=]\s*(?:async\s+)?(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>/g;
-    let matchArrow;
-    while ((matchArrow = arrowRegex.exec(content)) !== null) {
-      const name = matchArrow[1];
-      if (name && !methods.some(m => m.startsWith(name + '('))) {
-        methods.push(`${name}()`); // simplified args for arrow functions
+      for (const cls of sourceFile.getClasses()) {
+        const publicMethods = cls.getMethods()
+          .filter(m => !m.hasModifier(SyntaxKind.PrivateKeyword) && !m.hasModifier(SyntaxKind.ProtectedKeyword))
+          .map(m => m.getName() + '()');
+        methods.push(...publicMethods);
       }
-    }
+      
+      for (const varDecl of sourceFile.getVariableDeclarations()) {
+        const initializer = varDecl.getInitializer();
+        if (initializer && Node.isObjectLiteralExpression(initializer)) {
+          for (const prop of initializer.getProperties()) {
+            if (Node.isMethodDeclaration(prop)) {
+              methods.push(prop.getName() + '()');
+            } else if (Node.isPropertyAssignment(prop)) {
+              const propInit = prop.getInitializer();
+              if (propInit && (Node.isArrowFunction(propInit) || Node.isFunctionExpression(propInit))) {
+                methods.push(prop.getName() + '()');
+              }
+            }
+          }
+        }
+      }
+      
+      for (const fn of sourceFile.getFunctions()) {
+        if (fn.isExported()) {
+          methods.push(fn.getName() + '()');
+        }
+      }
 
-    // 3. Captures standard exported functions: `export function myMethod(arg)`
-    const fnRegex = /export\s+(?:async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/g;
-    let matchFn;
-    while ((matchFn = fnRegex.exec(content)) !== null) {
-       const name = matchFn[1];
-       if (!name) continue;
-       const args = (matchFn[2] || '').trim().replace(/\s+/g, ' ');
-       if (!methods.some(m => m.startsWith(name + '('))) {
-         methods.push(`${name}(${args})`);
-       }
+      return [...new Set(methods)];
+    } catch (e) {
+      return [];
     }
-
-    return methods;
   }
   /**
    * Extracts BDD step patterns from file content (Given, When, Then).
