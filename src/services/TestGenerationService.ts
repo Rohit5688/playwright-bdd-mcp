@@ -133,6 +133,7 @@ ${dotenvImportRule}
 26. Test Data Reuse Excellence: You MUST prioritize reusing the existing test data structures provided in context. If a similar data shape exists, use it via \`fs.readFileSync\` or dynamic imports instead of generating new mock JSON files or interfaces.
 27. Automated Accessibility: If the user description mentions "accessibility", "WCAG", "a11y", or "compliance", or if it's a critical page transition, you MUST include a \`Then I check accessibility of the page\` step. This maps to \`await pageObject.checkAccessibility()\` which is inherited from \`BasePage\`.
 28. TSConfig Autowiring: If your implementation creates a NEW top-level architectural directory (e.g., \`models/\`, \`types/\`, \`helpers/\`), you MUST also actively update \`tsconfig.json\` in the target project via standard file editing tools. You must append the corresponding path alias (e.g., \`"@models/*": ["./models/*"]\`) to \`compilerOptions.paths\`, and ENSURE your newly generated TypeScript files strictly use that alias in their imports.
+29. **[PHASE 4: STATE-MACHINE MICRO-PROMPTING]**: If this request requires generating a very large Page Object AND complex step definitions simultaneously across multiple files, you MUST serialize your work. Generate and invoke \`validate_and_write\` for ONLY the \`jsonPageObjects\` first. Wait for the compilation success response before generating the \`.feature\` and \`.steps.ts\` files in a subsequent attempt. Do NOT overwhelm your context window.
 
 ${memoryPrompt}
 
