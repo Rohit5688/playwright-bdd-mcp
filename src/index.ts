@@ -29,6 +29,7 @@ import { AnalyticsService } from "./services/AnalyticsService.js";
 import { LearningService } from "./services/LearningService.js";
 import { PipelineService } from "./services/PipelineService.js";
 import { PlaywrightSessionService } from "./services/PlaywrightSessionService.js";
+import { ASTScrutinizer } from "./utils/ASTScrutinizer.js";
 import type { CodebaseAnalysisResult } from "./interfaces/ICodebaseAnalyzer.js";
 import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
 import { executeSandbox } from "./services/SandboxEngine.js";
@@ -585,11 +586,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const currentAttempt = (retrySessionMap.get(projectRoot) ?? 0) + 1;
         retrySessionMap.set(projectRoot, currentAttempt);
 
+        // Phase 4.1: AST "Laziness" Scanner (Zero-Trust Enforcement)
+        try {
+          for (const f of files) {
+             ASTScrutinizer.scrutinize(f.content, f.path);
+          }
+        } catch (astError: any) {
+           return {
+             content: [{ 
+               type: "text", 
+               text: astError.message || String(astError)
+             }],
+             isError: true
+           };
+        }
+
         // Preview Mode explicitly skips touching the file system
         if (dryRun) {
            const writeResult = fileWriter.writeFiles(projectRoot, files, true);
            const secretViolations = auditGeneratedCode(files);
-           let previewMsg = `✅ DRY RUN SUCCESS\n\nProposed files validated (NOT written):\n${writeResult.written.map((f: string) => `  - ${f}`).join('\n')}`;
+           let previewMsg = `✅ DRY RUN SUCCESS\n\nProposed files validated and structurally sound (NOT written):\n${writeResult.written.map((f: string) => `  - ${f}`).join('\n')}`;
            if (secretViolations.length > 0) {
              previewMsg += `\n\n🔒 SECRET AUDIT WARNING:\n${secretViolations.join('\n')}`;
            }
