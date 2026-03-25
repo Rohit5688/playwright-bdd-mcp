@@ -1028,18 +1028,27 @@ h3. Next Steps
         const sandboxResult = await executeSandbox(script, apiRegistry, { timeoutMs });
 
         if (sandboxResult.success) {
-          let responseText = '';
+          const parts: string[] = [];
+
           if (sandboxResult.logs.length > 0) {
-            responseText += `[Sandbox Logs]\n${sandboxResult.logs.join('\n')}\n\n`;
+            parts.push(`[Sandbox Logs]\n${sandboxResult.logs.join('\n')}`);
           }
-          responseText += typeof sandboxResult.result === 'string'
-            ? sandboxResult.result
-            : JSON.stringify(sandboxResult.result, null, 2);
-          responseText += `\n\n⏱️ Executed in ${sandboxResult.durationMs}ms`;
-          return { content: [{ type: "text", text: sanitizeOutput(responseText) }] };
+
+          if (sandboxResult.result != null) {
+            parts.push(
+              typeof sandboxResult.result === 'string'
+                ? sandboxResult.result
+                : JSON.stringify(sandboxResult.result, null, 2)
+            );
+          } else if (sandboxResult.logs.length === 0) {
+            parts.push('⚠️ Sandbox executed successfully but returned no data. Ensure your script uses `return <value>` to send results back.');
+          }
+
+          parts.push(`\n⏱️ Executed in ${sandboxResult.durationMs}ms`);
+          return { content: [{ type: "text", text: sanitizeOutput(parts.join('\n\n')) }] };
         } else {
           return {
-            content: [{ type: "text", text: `❌ SANDBOX ERROR: ${sandboxResult.error}\n\nLogs:\n${sandboxResult.logs.join('\n')}` }],
+            content: [{ type: "text", text: `❌ SANDBOX ERROR: ${sandboxResult.error}\n\nLogs:\n${sandboxResult.logs.join('\n')}\n\n⏱️ Failed after ${sandboxResult.durationMs}ms` }],
             isError: true,
           };
         }
