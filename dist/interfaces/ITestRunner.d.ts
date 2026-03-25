@@ -10,7 +10,8 @@ export interface ITestRunner {
      * @param projectRoot - Absolute path to the test project
      * @param specificTestArgs - Optional Playwright CLI arguments (e.g., --grep @smoke)
      * @param timeoutMs - Optional per-run shell timeout in milliseconds (default: 120000)
+     * @param executionCommand - Optional custom execution command (e.g., "yarn test")
      */
-    runTests(projectRoot: string, specificTestArgs?: string, timeoutMs?: number): Promise<TestRunnerResult>;
+    runTests(projectRoot: string, specificTestArgs?: string, timeoutMs?: number, executionCommand?: string): Promise<TestRunnerResult>;
 }
 //# sourceMappingURL=ITestRunner.d.ts.map

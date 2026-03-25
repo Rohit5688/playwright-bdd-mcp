@@ -68,6 +68,8 @@ export interface CodebaseAnalysisResult {
         pagesRoot: string;
         utilsRoot: string;
     };
+    importAliases?: Record<string, string[]>;
+    packageScripts?: Record<string, string>;
     recommendation: string;
 }
 export interface ICodebaseAnalyzer {

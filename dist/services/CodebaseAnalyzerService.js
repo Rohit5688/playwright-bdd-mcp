@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { Project, SyntaxKind, Node } from 'ts-morph';
 import { McpConfigService, DEFAULT_CONFIG } from './McpConfigService.js';
 export class CodebaseAnalyzerService {
     async analyze(projectRoot, customWrapperPackage) {
@@ -38,47 +39,100 @@ export class CodebaseAnalyzerService {
             }
             // 2. Discover Features dynamically across the workspace
             const featureFiles = await this.readAllFiles(projectRoot, '.feature');
-            result.existingFeatures = featureFiles.map(f => path.relative(projectRoot, f));
+            result.existingFeatures = featureFiles.map(f => path.relative(projectRoot, f).replace(/\\/g, '/'));
             const firstFeature = featureFiles[0];
             if (firstFeature) {
-                result.detectedPaths.featuresRoot = path.dirname(path.relative(projectRoot, firstFeature));
+                result.detectedPaths.featuresRoot = path.dirname(path.relative(projectRoot, firstFeature).replace(/\\/g, '/'));
             }
             // 3 & 4. Discover TypeScript Files (Step Definitions and Page Objects)
             const tsFiles = await this.readAllFiles(projectRoot, '.ts');
             const stepDefs = [];
             const pageObjs = [];
-            for (const f of tsFiles) {
-                if (f.includes('node_modules') || f.includes('playwright.config') || f.includes('mcp-config'))
-                    continue;
-                const content = await fs.readFile(f, 'utf8');
-                // Look for step definitions
-                const steps = this.extractSteps(content);
-                if (steps.length > 0) {
-                    const relPath = path.relative(projectRoot, f);
-                    stepDefs.push({
-                        file: relPath,
-                        steps
-                    });
-                    if (result.detectedPaths.stepsRoot === 'step-definitions')
-                        result.detectedPaths.stepsRoot = path.dirname(relPath);
+            if (tsFiles.length > 0) {
+                const project = new Project({ compilerOptions: { strict: false }, skipAddingFilesFromTsConfig: true });
+                for (const f of tsFiles) {
+                    if (f.includes('node_modules') || f.includes('playwright.config') || f.includes('mcp-config') || f.endsWith('d.ts'))
+                        continue;
+                    project.addSourceFileAtPath(f);
                 }
-                // Look for page objects or base classes
-                const methods = this.extractPublicMethods(content);
-                if (methods.length > 0) {
-                    const relPath = path.relative(projectRoot, f);
+                for (const sourceFile of project.getSourceFiles()) {
+                    const filePath = sourceFile.getFilePath();
+                    const relPath = path.relative(projectRoot, filePath).replace(/\\/g, '/');
+                    const content = sourceFile.getFullText();
+                    // Look for step definitions (using Regex for strict BDD steps to match Playwright-BDD structure)
+                    const steps = this.extractSteps(content);
+                    if (steps.length > 0) {
+                        stepDefs.push({ file: relPath, steps });
+                        if (result.detectedPaths.stepsRoot === 'step-definitions')
+                            result.detectedPaths.stepsRoot = path.dirname(relPath);
+                        continue;
+                    }
+                    let isPageObject = false;
+                    let fileMethods = [];
+                    // Class-based POMs
+                    const classes = sourceFile.getClasses();
+                    for (const cls of classes) {
+                        const className = cls.getName() || '';
+                        const isStandardPom = className.toLowerCase().includes('page') || className.toLowerCase().includes('screen');
+                        const hasClassLocators = this.hasClassLocatorsFast(content);
+                        if (isStandardPom || hasClassLocators) {
+                            const publicMethods = cls.getMethods()
+                                .filter(m => !m.hasModifier(SyntaxKind.PrivateKeyword) && !m.hasModifier(SyntaxKind.ProtectedKeyword))
+                                .map(m => m.getName() + '()');
+                            fileMethods.push(...publicMethods);
+                            pageObjs.push({ path: relPath, publicMethods, className: className || 'AnonymousClass' });
+                            isPageObject = true;
+                        }
+                    }
+                    // Object-literal and Exported arrow function POMs
+                    const variableDeclarations = sourceFile.getVariableDeclarations();
+                    for (const varDecl of variableDeclarations) {
+                        const name = varDecl.getName() || '';
+                        const isStandardPom = name.toLowerCase().includes('page') || name.toLowerCase().includes('screen');
+                        const publicMethods = [];
+                        let hasLocators = false;
+                        const initializer = varDecl.getInitializer();
+                        if (initializer && Node.isObjectLiteralExpression(initializer)) {
+                            const bodyText = initializer.getText();
+                            hasLocators = this.hasClassLocatorsFast(bodyText);
+                            for (const prop of initializer.getProperties()) {
+                                if (Node.isMethodDeclaration(prop)) {
+                                    publicMethods.push(prop.getName() + '()');
+                                }
+                                else if (Node.isPropertyAssignment(prop)) {
+                                    const propInit = prop.getInitializer();
+                                    if (propInit && (Node.isArrowFunction(propInit) || Node.isFunctionExpression(propInit))) {
+                                        publicMethods.push(prop.getName() + '()');
+                                    }
+                                }
+                            }
+                        }
+                        else if (initializer && (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))) {
+                            // Standalone exported arrow function
+                            if (varDecl.isExported()) {
+                                const bodyText = initializer.getText();
+                                hasLocators = this.hasClassLocatorsFast(bodyText);
+                                if (hasLocators || isStandardPom) {
+                                    publicMethods.push(name + '()');
+                                }
+                            }
+                        }
+                        if (isStandardPom || hasLocators) {
+                            fileMethods.push(...publicMethods);
+                            pageObjs.push({ path: relPath, publicMethods, className: name || 'AnonymousObject' });
+                            isPageObject = true;
+                        }
+                    }
+                    if (isPageObject && result.detectedPaths.pagesRoot === 'pages') {
+                        result.detectedPaths.pagesRoot = path.dirname(relPath);
+                    }
                     // Check for custom wrapper override
-                    if (!customWrapperPackage && path.basename(f) === 'BasePage.ts') {
+                    if (!customWrapperPackage && path.basename(filePath) === 'BasePage.ts' && fileMethods.length > 0) {
                         result.customWrapper = {
                             package: 'local BasePage',
-                            detectedMethods: methods
+                            detectedMethods: fileMethods
                         };
                     }
-                    pageObjs.push({
-                        path: relPath,
-                        publicMethods: methods
-                    });
-                    if (result.detectedPaths.pagesRoot === 'pages')
-                        result.detectedPaths.pagesRoot = path.dirname(relPath);
                 }
             }
             result.existingStepDefinitions = stepDefs;
@@ -115,7 +169,7 @@ RULES FOR AI:
                         if (!await this.directoryExists(archDir))
                             await fs.mkdir(archDir, { recursive: true });
                         await fs.writeFile(fullArchPath, archContent, 'utf-8');
-                        result.customWrapper.architectureNotesPath = archNotesPath;
+                        result.customWrapper.architectureNotesPath = archNotesPath.replace(/\\/g, '/');
                     }
                     catch (e) {
                         const msg = e instanceof Error ? e.message : String(e);
@@ -139,11 +193,48 @@ RULES FOR AI:
                     console.warn('Failed to parse package.json for scripts');
                 }
             }
+            // 6b. Parse tsconfig.json for Path Aliasing
+            const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
+            if (await this.fileExists(tsconfigPath)) {
+                try {
+                    const content = await fs.readFile(tsconfigPath, 'utf8');
+                    // Strip comments before parsing
+                    const stripped = content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
+                    const tsconfig = JSON.parse(stripped);
+                    if (tsconfig.compilerOptions?.paths) {
+                        result.importAliases = tsconfig.compilerOptions.paths;
+                    }
+                }
+                catch (e) { }
+            }
+            // 6c. Parse package.json for Execution Scripts
+            const packageJsonPath = path.join(projectRoot, 'package.json');
+            if (await this.fileExists(packageJsonPath)) {
+                try {
+                    const pkgContent = await fs.readFile(packageJsonPath, 'utf8');
+                    const pkg = JSON.parse(pkgContent);
+                    if (pkg.scripts) {
+                        result.packageScripts = pkg.scripts;
+                    }
+                }
+                catch (e) { }
+            }
             // 7. Discover existing Env Files
-            const rootFiles = await fs.readdir(projectRoot);
+            let rootFiles = [];
+            try {
+                rootFiles = await fs.readdir(projectRoot);
+            }
+            catch (e) { }
             const envFiles = rootFiles.filter(f => f.startsWith('.env') && !f.endsWith('.example'));
+            let hasCustomConfigDir = false;
+            try {
+                const configStat = await fs.stat(path.join(projectRoot, 'config'));
+                if (configStat.isDirectory())
+                    hasCustomConfigDir = true;
+            }
+            catch { }
             result.envConfig = {
-                present: envFiles.length > 0,
+                present: envFiles.length > 0 || hasCustomConfigDir,
                 files: envFiles,
                 keys: []
             };
@@ -167,7 +258,7 @@ RULES FOR AI:
                         const ext = path.extname(f);
                         if (!['.json', '.ts', '.js'].includes(ext))
                             continue;
-                        const relativePath = path.relative(projectRoot, f);
+                        const relativePath = path.relative(projectRoot, f).replace(/\\/g, '/');
                         const content = await fs.readFile(f, 'utf8');
                         const sampledStructure = this.extractSampleStructure(content, ext);
                         // Heuristic: if it's in a 'fixtures' dir, count as fixture, else payload
@@ -331,26 +422,50 @@ RULES FOR AI:
             return `PascalCase${ext}`;
         return `camelCase${ext}`;
     }
+    hasClassLocatorsFast(content) {
+        return content.includes('page.locator') || content.includes('page.getBy') || content.includes('page.$') || content.includes('page.goto');
+    }
     /**
-     * Enhanced regex-based method extraction for TypeScript classes.
-     * Gets `methodName(arg1: string, arg2?: number)` signatures.
+     * Enhanced AST-based method extraction for TypeScript classes using ts-morph.
+     * Leveraged primarily to resolve custom wrapper packages.
      */
     extractPublicMethods(content) {
-        const methods = [];
-        // Captures the method name in group 1, and the arguments inside the parens in group 2
-        const regex = /(?:public\s+)?(?:async\s+)?([a-zA-Z0-9_]+)\s*\(([^)]*)\)\s*(?::\s*[^{]+)?\s*\{/g;
-        let match;
-        while ((match = regex.exec(content)) !== null) {
-            const name = match[1];
-            if (!name)
-                continue;
-            const args = (match[2] || '').trim().replace(/\s+/g, ' '); // Normalize newlines in args
-            // Ignore typical keywords/constructors
-            if (['constructor', 'if', 'while', 'for', 'switch', 'catch', 'function'].includes(name))
-                continue;
-            methods.push(`${name}(${args})`);
+        try {
+            const project = new Project({ compilerOptions: { strict: false }, skipAddingFilesFromTsConfig: true });
+            const sourceFile = project.createSourceFile('temp.ts', content);
+            const methods = [];
+            for (const cls of sourceFile.getClasses()) {
+                const publicMethods = cls.getMethods()
+                    .filter(m => !m.hasModifier(SyntaxKind.PrivateKeyword) && !m.hasModifier(SyntaxKind.ProtectedKeyword))
+                    .map(m => m.getName() + '()');
+                methods.push(...publicMethods);
+            }
+            for (const varDecl of sourceFile.getVariableDeclarations()) {
+                const initializer = varDecl.getInitializer();
+                if (initializer && Node.isObjectLiteralExpression(initializer)) {
+                    for (const prop of initializer.getProperties()) {
+                        if (Node.isMethodDeclaration(prop)) {
+                            methods.push(prop.getName() + '()');
+                        }
+                        else if (Node.isPropertyAssignment(prop)) {
+                            const propInit = prop.getInitializer();
+                            if (propInit && (Node.isArrowFunction(propInit) || Node.isFunctionExpression(propInit))) {
+                                methods.push(prop.getName() + '()');
+                            }
+                        }
+                    }
+                }
+            }
+            for (const fn of sourceFile.getFunctions()) {
+                if (fn.isExported()) {
+                    methods.push(fn.getName() + '()');
+                }
+            }
+            return [...new Set(methods)];
         }
-        return methods;
+        catch (e) {
+            return [];
+        }
     }
     /**
      * Extracts BDD step patterns from file content (Given, When, Then).

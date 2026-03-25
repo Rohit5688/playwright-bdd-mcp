@@ -13,9 +13,10 @@ export declare class CodebaseAnalyzerService implements ICodebaseAnalyzer {
      * Helper that checks array of files to determine naming conventions (PascalCase, kebab-case, snake_case).
      */
     private detectNamingConvention;
+    private hasClassLocatorsFast;
     /**
-     * Enhanced regex-based method extraction for TypeScript classes.
-     * Gets `methodName(arg1: string, arg2?: number)` signatures.
+     * Enhanced AST-based method extraction for TypeScript classes using ts-morph.
+     * Leveraged primarily to resolve custom wrapper packages.
      */
     private extractPublicMethods;
     /**

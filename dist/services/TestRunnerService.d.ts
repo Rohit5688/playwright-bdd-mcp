@@ -7,6 +7,6 @@ import type { ITestRunner, TestRunnerResult } from '../interfaces/ITestRunner.js
  * Phase 35b: Per-run timeout is config-driven via mcp-config.json (testRunTimeout).
  */
 export declare class TestRunnerService implements ITestRunner {
-    runTests(projectRoot: string, specificTestArgs?: string, timeoutMs?: number): Promise<TestRunnerResult>;
+    runTests(projectRoot: string, specificTestArgs?: string, timeoutMs?: number, executionCommand?: string): Promise<TestRunnerResult>;
 }
 //# sourceMappingURL=TestRunnerService.d.ts.map

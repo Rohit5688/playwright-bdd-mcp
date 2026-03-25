@@ -25,6 +25,8 @@ import { AnalyticsService } from "./services/AnalyticsService.js";
 import { LearningService } from "./services/LearningService.js";
 import { PipelineService } from "./services/PipelineService.js";
 import { PlaywrightSessionService } from "./services/PlaywrightSessionService.js";
+import { ASTScrutinizer } from "./utils/ASTScrutinizer.js";
+import { JsonToPomTranspiler } from "./utils/JsonToPomTranspiler.js";
 import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
 import { executeSandbox } from "./services/SandboxEngine.js";
 // SOLID: Dependency Injection Root
@@ -97,6 +99,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     type: "object",
                     properties: {
                         projectRoot: { type: "string", description: "Absolute path to the automation project." },
+                        overrideCommand: { type: "string", description: "Optional full command to run (e.g. 'npm run test:e2e:smoke'). This bypasses the default executionCommand." },
                         specificTestArgs: { type: "string", description: "Optional arguments like a specific feature file path or project flag." },
                         tags: { type: "string", description: "Optional: filter by tag(s), e.g. '@smoke' or '@regression'. Passed as --grep to Playwright." }
                     },
@@ -170,6 +173,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                                     content: { type: "string" }
                                 },
                                 required: ["path", "content"]
+                            }
+                        },
+                        jsonPageObjects: {
+                            type: "array",
+                            description: "Optional structured JSON representations of Page Objects (bypasses raw TS formatting).",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    className: { type: "string" },
+                                    path: { type: "string" },
+                                    extendsClass: { type: "string" },
+                                    imports: { type: "array", items: { type: "string" } },
+                                    locators: { type: "array", items: { type: "object" } },
+                                    methods: { type: "array", items: { type: "object" } }
+                                },
+                                required: ["className", "path"]
                             }
                         },
                         pageUrl: { type: "string", description: "Optional URL used to re-inspect the DOM during self-healing retries." },
@@ -498,12 +517,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: "text", text: instruction }] };
             }
             case "run_playwright_test": {
-                const { projectRoot, specificTestArgs, tags } = args;
+                const { projectRoot, overrideCommand, specificTestArgs, tags } = args;
                 await maintenance.ensureUpToDate(projectRoot);
                 const config = mcpConfig.read(projectRoot);
                 const grepArg = tags ? `--grep "${tags}"` : '';
                 const combinedArgs = [specificTestArgs, grepArg].filter(Boolean).join(' ');
-                const result = await runner.runTests(projectRoot, combinedArgs || undefined, config.testRunTimeout);
+                const activeCommand = overrideCommand || config.executionCommand;
+                const result = await runner.runTests(projectRoot, combinedArgs || undefined, config.testRunTimeout, activeCommand);
                 return { content: [{ type: "text", text: sanitizeOutput(result.output) }] };
             }
             case "update_visual_baselines": {
@@ -513,7 +533,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const grepArg = tags ? `--grep "${tags}"` : '';
                 const baselineArg = '--update-snapshots';
                 const combinedArgs = [specificTestArgs, grepArg, baselineArg].filter(Boolean).join(' ');
-                const result = await runner.runTests(projectRoot, combinedArgs, config.testRunTimeout);
+                const result = await runner.runTests(projectRoot, combinedArgs, config.testRunTimeout, config.executionCommand);
                 return { content: [{ type: "text", text: sanitizeOutput(result.output) }] };
             }
             case "summarize_suite": {
@@ -541,15 +561,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: "text", text: sanitizeOutput(response) }] };
             }
             case "validate_and_write": {
-                const { projectRoot, files, pageUrl, dryRun } = args;
+                let { projectRoot, files, jsonPageObjects, pageUrl, dryRun } = args;
                 const MAX_RETRIES = 3;
                 const currentAttempt = (retrySessionMap.get(projectRoot) ?? 0) + 1;
                 retrySessionMap.set(projectRoot, currentAttempt);
+                // Phase 4.2: JSON-Structured Code Generation
+                // Transpile incoming JSON POMs and inject them into standard files array
+                if (jsonPageObjects && Array.isArray(jsonPageObjects)) {
+                    for (const jsonPom of jsonPageObjects) {
+                        if (jsonPom.className && jsonPom.path) {
+                            const generatedContent = JsonToPomTranspiler.transpile(jsonPom);
+                            files.push({
+                                path: jsonPom.path,
+                                content: generatedContent
+                            });
+                        }
+                    }
+                }
+                // Phase 4.1: AST "Laziness" Scanner (Zero-Trust Enforcement)
+                try {
+                    for (const f of files) {
+                        ASTScrutinizer.scrutinize(f.content, f.path);
+                    }
+                }
+                catch (astError) {
+                    return {
+                        content: [{
+                                type: "text",
+                                text: astError.message || String(astError)
+                            }],
+                        isError: true
+                    };
+                }
                 // Preview Mode explicitly skips touching the file system
                 if (dryRun) {
                     const writeResult = fileWriter.writeFiles(projectRoot, files, true);
                     const secretViolations = auditGeneratedCode(files);
-                    let previewMsg = `✅ DRY RUN SUCCESS\n\nProposed files validated (NOT written):\n${writeResult.written.map((f) => `  - ${f}`).join('\n')}`;
+                    let previewMsg = `✅ DRY RUN SUCCESS\n\nProposed files validated and structurally sound (NOT written):\n${writeResult.written.map((f) => `  - ${f}`).join('\n')}`;
                     if (secretViolations.length > 0) {
                         previewMsg += `\n\n🔒 SECRET AUDIT WARNING:\n${secretViolations.join('\n')}`;
                     }
@@ -586,7 +634,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         targetArg = `--grep "${match[1].trim()}"`;
                     }
                 }
-                const runResult = await runner.runTests(projectRoot, targetArg, runConfig.testRunTimeout);
+                const runResult = await runner.runTests(projectRoot, targetArg, runConfig.testRunTimeout, runConfig.executionCommand);
                 const lastOutput = runResult.output;
                 if (runResult.passed) {
                     retrySessionMap.delete(projectRoot);
