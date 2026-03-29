@@ -119,7 +119,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "run_playwright_test",
-        description: "Executes the Playwright-BDD test suite natively. Use this tool AFTER generating the test files to verify if they compile and pass. It runs `npx bddgen && npx playwright test` and returns the terminal output (success or failure logs).",
+        description: "Executes the Playwright-BDD test suite natively. Use this tool AFTER generating the test files to verify if they compile and pass. It runs `npm test` and returns the terminal output (success or failure logs).",
         inputSchema: {
           type: "object",
           properties: {

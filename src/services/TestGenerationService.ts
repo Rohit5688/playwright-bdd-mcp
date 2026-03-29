@@ -154,7 +154,7 @@ ${memoryPrompt}
 - Standard Playwright APIs (test, expect, Page, Locator, etc.) MUST be imported from \`@playwright/test\`.
 - NEVER import \`test\` or \`expect\` from \`playwright-bdd\` — they belong to \`@playwright/test\`, which is installed implicitly by \`playwright-bdd\`.
 - Do NOT import from \`@cucumber/cucumber\`.
-- In your explanation string, remind the user that they must run \`npx bddgen\` to generate the test files, followed by \`npx playwright test\`.
+- In your explanation string, remind the user that they must run \`npm test\` to generate the test files and execute them.
 
 --- OUTPUT SCHEMA ---
 Your entire response must be a single JSON object with this shape. DO NOT write raw TypeScript strings for Page Objects. You MUST output Page Objects exclusively in the \`jsonPageObjects\` array to avoid syntactical/formatting hallucinations. The MCP server will generate the TypeScript files for you.

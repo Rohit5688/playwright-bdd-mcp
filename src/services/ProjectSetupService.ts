@@ -291,7 +291,7 @@ export class ProjectSetupService {
       '\n\n\ud83d\ude80 NEXT STEPS:',
       '  1. Open .env and replace ***FILL_IN*** values.',
       '  2. Update BASE_URL in .env to your application URL.',
-      '  3. Ask me to generate tests, or run: npx bddgen && npx playwright test',
+      '  3. Ask me to generate tests, or run: npm test',
     ].filter(Boolean).join('');
 
     return { projectRoot, installed, dirsCreated, filesCreated, envScaffolded, message };
