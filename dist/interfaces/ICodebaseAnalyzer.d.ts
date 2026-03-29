@@ -10,7 +10,24 @@ export interface CodebaseAnalysisResult {
     }[];
     existingPageObjects: {
         path: string;
+        className?: string;
         publicMethods: string[];
+    }[];
+    /**
+     * BUG-04 FIX: Page Registry / AppManager pattern.
+     * Registries are classes whose properties instantiate other page classes
+     * (e.g. class AppManager { loginPage = new LoginPage(page); }).
+     * When detected, generators MUST use the registry variable
+     * (e.g. `this.app.loginPage`) instead of instantiating a new class.
+     */
+    pageRegistries?: {
+        className: string;
+        path: string;
+        registryVar?: string;
+        pages: {
+            propertyName: string;
+            pageClass: string;
+        }[];
     }[];
     customWrapper?: {
         package: string;

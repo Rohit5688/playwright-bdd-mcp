@@ -3,8 +3,15 @@ export declare class CodebaseAnalyzerService implements ICodebaseAnalyzer {
     analyze(projectRoot: string, customWrapperPackage?: string): Promise<CodebaseAnalysisResult>;
     private fileExists;
     /**
-     * Scans upward from the project root to check for duplicate @playwright/test installations.
-     * Double installations cause the notorious 'describe() unexpectedly called' error.
+     * BUG-11 FIX: Scans for duplicate @playwright/test installations that cause
+     * the 'describe() unexpectedly called' error.
+     *
+     * PREVIOUS (BROKEN): walked UP the directory tree. In a monorepo this always
+     * finds the workspace-root @playwright/test and fires a false-positive warning.
+     *
+     * FIXED: Scans DOWNWARD — checks depth-2 in node_modules (i.e. a direct
+     * dependency that bundled its own @playwright/test copy). This is the only
+     * scenario that truly causes loader conflicts, not a shared monorepo install.
      */
     private scanForDuplicatePlaywrightInstallations;
     private directoryExists;

@@ -35,6 +35,11 @@ import type { CodebaseAnalysisResult } from "./interfaces/ICodebaseAnalyzer.js";
 import { sanitizeOutput, auditGeneratedCode } from "./utils/SecurityUtils.js";
 import { executeSandbox } from "./services/SandboxEngine.js";
 import type { SandboxApiRegistry } from "./services/SandboxEngine.js";
+import { ClarificationRequired, Questioner } from "./utils/Questioner.js";
+import { TestForgeError } from "./utils/ErrorCodes.js";
+import { EnvironmentCheckService } from "./services/EnvironmentCheckService.js";
+import { LocatorAuditService } from "./services/LocatorAuditService.js";
+import { UtilAuditService } from "./services/UtilAuditService.js";
 
 // SOLID: Dependency Injection Root
 const analyzer = new CodebaseAnalyzerService();
@@ -56,6 +61,9 @@ const analyticsService = new AnalyticsService();
 const learningService = new LearningService();
 const pipelineService = new PipelineService();
 const sessionService = new PlaywrightSessionService();
+const envCheckService = new EnvironmentCheckService();
+const locatorAuditService = new LocatorAuditService();
+const utilAuditService = new UtilAuditService();
 
 const server = new Server(
   {
@@ -69,12 +77,15 @@ const server = new Server(
   }
 );
 
-// Memory cache for analysis to pass to generator
-let lastAnalysisResult: CodebaseAnalysisResult | null = null;
+// BUG-03 FIX: Use a per-projectRoot cache instead of a server-wide singleton.
+// A shared singleton causes cross-user context contamination in multi-client
+// or rapid sequential usage — Client B's analysis overwrites Client A's before
+// Client A's generation runs, producing wrong POM suggestions.
+const analysisCache = new Map<string, CodebaseAnalysisResult>();
 
 // --- 18C FIX: Server-side retry session tracking ---
 // Tracks how many validate_and_write attempts have been made per project.
-// Resets on success or exhaustion.
+// Resets on success or exhaustion, and on any fresh invocation after exhaustion.
 const retrySessionMap = new Map<string, number>();
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -237,11 +248,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "setup_project",
-        description: "Bootstraps a new or empty directory into a fully configured Playwright-BDD project. Creates features/, pages/, step-definitions/ structure, installs npm packages (@playwright/test, playwright-bdd, typescript, dotenv), writes playwright.config.ts, tsconfig.json, and scaffolds a .env file. Call this FIRST when a user starts a brand-new test project.",
+        description: "Bootstraps a new or empty directory into a fully configured Playwright-BDD project. Creates features/, pages/, step-definitions/ structure, installs npm packages (playwright-bdd, typescript, dotenv, faker), writes playwright.config.ts, tsconfig.json, and scaffolds a .env file. Call this FIRST when a user starts a brand-new test project.",
         inputSchema: {
           type: "object",
           properties: {
             projectRoot: { type: "string", description: "Absolute path to the new or empty project directory." }
+          },
+          required: ["projectRoot"],
+        },
+      },
+      {
+        name: "repair_project",
+        description: "Repair and restore missing baseline files after a partial or interrupted setup_project run. Safe to run at any time — only generates files that are missing and never overwrites existing ones.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            projectRoot: { type: "string", description: "Absolute path to the project root." }
           },
           required: ["projectRoot"],
         },
@@ -461,6 +483,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["script"],
         },
+      },
+      {
+        name: "check_environment",
+        description: "Pre-flight check: verify Node.js version, @playwright/test installed, browser binaries downloaded, playwright.config.ts present, mcp-config.json, node_modules, and BASE_URL reachability.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            projectRoot: { type: "string" },
+            baseUrl: { type: "string", description: "Optional URL to test reachability. If omitted, reads BASE_URL from .env" }
+          },
+          required: ["projectRoot"]
+        }
+      },
+      {
+        name: "audit_locators",
+        description: "Scan Page Objects and audit locator strategies. Flags brittle XPath and legacy page.$() calls as critical, CSS class/ID selectors as warnings, and semantic getBy* locators as stable. Returns a Markdown health report.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            projectRoot: { type: "string" },
+            pagesRoot: { type: "string", description: "Relative path to the pages directory. Defaults to 'pages'" }
+          },
+          required: ["projectRoot"]
+        }
+      },
+      {
+        name: "audit_utils",
+        description: "Scans the project utils layer (utils/, helpers/, support/) against the Playwright API surface map and reports missing helper methods. Custom-wrapper-aware: methods provided by a custom wrapper package (e.g. @company/playwright-base) are counted as present and NOT listed as missing. Use this to discover what helper utilities still need to be implemented.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            projectRoot: { type: "string" },
+            customWrapperPackage: { type: "string", description: "Optional: package name or path to a custom BasePage/wrapper. E.g. '@myorg/playwright-helpers'. Methods from this package are counted as already present." }
+          },
+          required: ["projectRoot"]
+        }
       }
     ],
   };
@@ -510,7 +568,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
 
-        lastAnalysisResult = analysis;
+        analysisCache.set(projectRoot, analysis);
         return { content: [{ type: "text", text: sanitizeOutput(JSON.stringify(analysis, null, 2)) }] };
       }
 
@@ -520,9 +578,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const config = mcpConfig.read(projectRoot);
         const resolvedWrapper = customWrapperPackage || config.basePageClass;
 
-        if (!lastAnalysisResult) {
-          lastAnalysisResult = await analyzer.analyze(projectRoot, resolvedWrapper);
+        if (!analysisCache.has(projectRoot)) {
+          analysisCache.set(projectRoot, await analyzer.analyze(projectRoot, resolvedWrapper));
         }
+        const lastAnalysisResult = analysisCache.get(projectRoot)!;
 
         try {
           config.dirs = {
@@ -600,7 +659,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "validate_and_write": {
         let { projectRoot, files, jsonPageObjects, pageUrl, dryRun } = args as any;
         const MAX_RETRIES = 3;
-        const currentAttempt = (retrySessionMap.get(projectRoot) ?? 0) + 1;
+        // BUG-02 FIX: If a previous session was exhausted or interrupted, the map
+        // entry could be stale (already at MAX_RETRIES). A fresh top-level invocation
+        // should always start at attempt 1, not continue from a prior stale count.
+        const existingCount = retrySessionMap.get(projectRoot) ?? 0;
+        const currentAttempt = existingCount >= MAX_RETRIES ? 1 : existingCount + 1;
         retrySessionMap.set(projectRoot, currentAttempt);
 
         // Phase 4.2: JSON-Structured Code Generation
@@ -764,8 +827,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "upgrade_project": {
         const { projectRoot } = args as any;
-        const msgs = await maintenance.ensureUpToDate(projectRoot);
-        return { content: [{ type: "text", text: `🚀 Project upgraded!\n\n${msgs.join('\n')}` }] };
+        const upgradeResult = await maintenance.upgradeProject(projectRoot);
+        return { content: [{ type: "text", text: `🚀 Project upgrade complete!\n\n${upgradeResult}` }] };
+      }
+
+      case "repair_project": {
+        const { projectRoot } = args as any;
+        const repairResult = await maintenance.repairProject(projectRoot);
+        return { content: [{ type: "text", text: repairResult }] };
       }
 
       case "manage_config": {
@@ -1054,10 +1123,70 @@ h3. Next Steps
         }
       }
 
+      case "check_environment": {
+        const { projectRoot, baseUrl } = args as any;
+        const report = await envCheckService.check(projectRoot, baseUrl);
+        return { content: [{ type: "text", text: report.summary }] };
+      }
+
+      case "audit_locators": {
+        const { projectRoot, pagesRoot } = args as any;
+        const report = await locatorAuditService.audit(projectRoot, pagesRoot);
+        return { content: [{ type: "text", text: report.markdownReport }] };
+      }
+
+      case "audit_utils": {
+        const { projectRoot, customWrapperPackage } = args as any;
+        const result = await utilAuditService.audit(projectRoot, customWrapperPackage);
+        const lines = [
+          `## 🔧 Playwright Utils Coverage Report`,
+          `**Coverage**: ${result.coveragePercent}% (${result.present.length}/${result.present.length + result.missing.length} methods)`,
+          result.customWrapperNote ? `\n${result.customWrapperNote}` : '',
+          result.coveredByWrapper.length > 0
+            ? `\n**Covered by custom wrapper**: ${result.coveredByWrapper.join(', ')}`
+            : '',
+          result.missing.length === 0
+            ? '\n✅ All standard Playwright helper methods are implemented!'
+            : `\n### Missing Methods (${result.missing.length}):\n` +
+              result.missing.map(m => `- \`${m.suggestedUtilClass}.${m.method}()\` [${m.category}] — ${m.description}`).join('\n'),
+          result.actionableSuggestions.length > 0
+            ? `\n### Actionable Suggestions:\n${result.actionableSuggestions.join('\n')}`
+            : ''
+        ].filter(Boolean).join('\n');
+        return { content: [{ type: "text", text: lines }] };
+      }
+
       default:
         throw new Error(`Tool not found: ${name}`);
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (error instanceof ClarificationRequired) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            action: 'CLARIFICATION_REQUIRED',
+            question: error.question,
+            context: error.context,
+            options: error.options ?? []
+          }, null, 2)
+        }]
+      };
+    }
+    if (error instanceof TestForgeError) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            action: 'ERROR',
+            code: error.code,
+            message: error.message,
+            remediation: error.remediation
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`Error in tool ${name}:`, error);
     return {
@@ -1093,16 +1222,9 @@ program
   .argument("<projectRoot>", "Absolute path to the project root")
   .action(async (projectRoot) => {
     const root = path.resolve(projectRoot);
-    const cfg = mcpConfig.scaffold(root);
-    userStore.scaffold(root, cfg.environments);
-    
-    // Regenerate user-helper with accurate roles, not tags
-    const storeData = userStore.read(root, cfg.currentEnvironment);
-    const roles = storeData.exists && storeData.roles.length > 0 ? storeData.roles : ['admin', 'standard', 'readonly'];
-    userStore.generateUserHelper(root, roles);
-    
-    envManager.scaffoldMulti(root, cfg.environments);
-    console.log(`🚀 Project upgraded to v${cfg.version} successfully!`);
+    const maint = new ProjectMaintenanceService();
+    const result = await maint.upgradeProject(root);
+    console.log(result);
     process.exit(0);
   });
 

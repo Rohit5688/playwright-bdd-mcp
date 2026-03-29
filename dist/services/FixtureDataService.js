@@ -27,7 +27,7 @@ ${schemaDefinition}
    - Merge the \`overrides\` parameter into the return object so tests can customize specific fields.
 
 3. **Playwright Fixture Binding**:
-   - Create and export a custom \`test\` object using \`import { test as base } from 'playwright-bdd';\`.
+   - Create and export a custom \`test\` object using \`import { test as base } from '@playwright/test';\`.
    - Extend the base test with the custom fixture.
    - Example syntax:
      \`\`\`typescript

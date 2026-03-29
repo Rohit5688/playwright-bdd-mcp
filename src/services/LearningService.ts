@@ -93,4 +93,38 @@ export class LearningService {
 
     return prompt;
   }
+
+  /** Deletes a specific rule by ID. Returns true if found and removed. */
+  public forget(projectRoot: string, ruleId: string): boolean {
+    const knowledge = this.getKnowledge(projectRoot);
+    const idx = knowledge.rules.findIndex(r => r.id === ruleId);
+    if (idx === -1) return false;
+    knowledge.rules.splice(idx, 1);
+    fs.writeFileSync(this.getStoragePath(projectRoot), JSON.stringify(knowledge, null, 2), 'utf8');
+    return true;
+  }
+
+  /**
+   * Exports the learning brain as a human-readable Markdown document.
+   * Called by the export_team_knowledge tool.
+   */
+  public exportToMarkdown(projectRoot: string): string {
+    const knowledge = this.getKnowledge(projectRoot);
+
+    if (knowledge.rules.length === 0) {
+      return '# TestForge MCP — Team Knowledge Base\n\n_No rules learned yet. Use `train_on_example` to add patterns._\n';
+    }
+
+    let md = `# TestForge MCP — Team Knowledge Base\n\n`;
+    md += `**Version**: ${knowledge.version}\n`;
+    md += `**Total Rules**: ${knowledge.rules.length}\n\n`;
+    md += `| # | Pattern | Solution | Tags | Learned |\n`;
+    md += `|---|---------|----------|------|--------|\n`;
+
+    knowledge.rules.forEach((rule, idx) => {
+      md += `| ${idx + 1} | ${rule.pattern} | ${rule.solution} | ${rule.tags.join(', ')} | ${rule.timestamp.split('T')[0]} |\n`;
+    });
+
+    return md;
+  }
 }

@@ -57,6 +57,8 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
       const tsFiles = await this.readAllFiles(projectRoot, '.ts');
       const stepDefs: any[] = [];
       const pageObjs: any[] = [];
+      // BUG-04: declare before the block so it's in scope for recommendation update below
+      const registries: NonNullable<typeof result.pageRegistries> = [];
       
       if (tsFiles.length > 0) {
         const project = new Project({ compilerOptions: { strict: false }, skipAddingFilesFromTsConfig: true });
@@ -151,13 +153,60 @@ export class CodebaseAnalyzerService implements ICodebaseAnalyzer {
               detectedMethods: fileMethods
             };
           }
-        }
-      }
-      
-      result.existingStepDefinitions = stepDefs;
-      result.existingPageObjects = pageObjs;
+        } // end for (const sourceFile of project.getSourceFiles())
 
-      // Extract Naming Conventions based on discovered files
+        result.existingStepDefinitions = stepDefs;
+        result.existingPageObjects = pageObjs;
+
+        // BUG-04 FIX: Page Registry / AppManager pattern detection.
+        // Run as a second pass INSIDE this block where `project` is in scope.
+        // Strategy: for each class, count properties that are `new XPage/XScreen/XComponent(...)`.
+        // If >= 2 such properties exist, classify the class as a page registry.
+        const knownPageClassNames = new Set(
+          pageObjs.map((p: any) => p.className as string).filter(Boolean)
+        );
+
+        for (const sourceFile of project.getSourceFiles()) {
+          const regRelPath = path.relative(projectRoot, sourceFile.getFilePath()).replace(/\\/g, '/');
+          for (const cls of sourceFile.getClasses()) {
+            const className = cls.getName() || '';
+            const pageInsts: { propertyName: string; pageClass: string }[] = [];
+
+            for (const prop of cls.getProperties()) {
+              const init = prop.getInitializer();
+              if (!init) continue;
+              const initText = init.getText();
+              const newMatch = initText.match(/^new\s+([A-Z][\w]*)\s*\(/);
+              if (newMatch) {
+                const instClass = newMatch[1] ?? '';
+                const looksLikePage =
+                  instClass.toLowerCase().endsWith('page') ||
+                  instClass.toLowerCase().endsWith('screen') ||
+                  instClass.toLowerCase().endsWith('component') ||
+                  knownPageClassNames.has(instClass);
+                if (looksLikePage) pageInsts.push({ propertyName: prop.getName(), pageClass: instClass });
+              }
+            }
+
+            if (pageInsts.length >= 2) {
+              const registryVar = className.charAt(0).toLowerCase() + className.slice(1);
+              registries.push({ className, path: regRelPath, registryVar, pages: pageInsts });
+            }
+          }
+        }
+      } // end if (tsFiles.length > 0)
+
+      if (registries.length > 0) {
+        result.pageRegistries = registries;
+        const regSummary = registries.map(r =>
+          `  ▶ ${r.className} (${r.registryVar}): ` +
+          r.pages.map(p => `${r.registryVar}.${p.propertyName}[→${p.pageClass}]`).join(', ')
+        ).join('\n');
+        result.recommendation +=
+          `\n\n❗ PAGE REGISTRY DETECTED — CRITICAL GENERATOR RULE:\n` +
+          `Do NOT instantiate page classes directly (e.g. new LoginPage()). ` +
+          `Use the existing registry variable instead:\n${regSummary}`;
+      }
       result.namingConventions = {
         features: this.detectNamingConvention(featureFiles, '.feature'),
         pages: this.detectNamingConvention(tsFiles.filter(f => f.toLowerCase().includes('page')), '.ts')
@@ -376,29 +425,44 @@ RULES FOR AI:
   }
 
   /**
-   * Scans upward from the project root to check for duplicate @playwright/test installations.
-   * Double installations cause the notorious 'describe() unexpectedly called' error.
+   * BUG-11 FIX: Scans for duplicate @playwright/test installations that cause
+   * the 'describe() unexpectedly called' error.
+   *
+   * PREVIOUS (BROKEN): walked UP the directory tree. In a monorepo this always
+   * finds the workspace-root @playwright/test and fires a false-positive warning.
+   *
+   * FIXED: Scans DOWNWARD — checks depth-2 in node_modules (i.e. a direct
+   * dependency that bundled its own @playwright/test copy). This is the only
+   * scenario that truly causes loader conflicts, not a shared monorepo install.
    */
   private async scanForDuplicatePlaywrightInstallations(startDir: string): Promise<string[]> {
     const installations: string[] = [];
-    let currentDir = path.resolve(startDir);
-    const rootDir = path.parse(currentDir).root;
-    
-    // Safety break at 10 levels deep to prevent infinite loops or sluggish performance
-    let depth = 0;
-    while (currentDir !== rootDir && depth < 10) {
-      const pmPath = path.join(currentDir, 'node_modules', '@playwright', 'test', 'package.json');
-      if (await this.fileExists(pmPath)) {
-        installations.push(currentDir);
+
+    // Level 1: canonical project-level install
+    const projectInstall = path.join(startDir, 'node_modules', '@playwright', 'test', 'package.json');
+    if (await this.fileExists(projectInstall)) {
+      installations.push(startDir);
+    }
+
+    // Level 2: any direct dependency that ships its own @playwright/test copy
+    const depModulesRoot = path.join(startDir, 'node_modules');
+    try {
+      const topLevelDeps = await fs.readdir(depModulesRoot, { withFileTypes: true });
+      for (const dep of topLevelDeps) {
+        if (!dep.isDirectory() || dep.name.startsWith('.') || dep.name.startsWith('@')) continue;
+        const nestedPath = path.join(depModulesRoot, dep.name, 'node_modules', '@playwright', 'test', 'package.json');
+        if (await this.fileExists(nestedPath)) {
+          installations.push(path.join(depModulesRoot, dep.name));
+        }
       }
-      currentDir = path.dirname(currentDir);
-      depth++;
+    } catch {
+      // node_modules doesn't exist yet — not an error
     }
 
     if (installations.length > 1) {
       return [
-        `Duplicate @playwright/test instances found in: ${installations.join(' AND ')}.`,
-        `Recommendation: Delete the node_modules in the parent directory or use a singular monorepo root. Double loading breaks test.describe().`
+        `Duplicate @playwright/test found. Project has its own install AND these dependencies bundle a copy: ${installations.slice(1).join(', ')}.`,
+        `Recommendation: Run npm dedupe, or add a resolution/override in package.json to pin @playwright/test to a single version. Double-loading breaks test.describe().`
       ];
     }
     return [];

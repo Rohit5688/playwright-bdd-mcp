@@ -77,6 +77,15 @@ export class TestGenerationService implements ITestGenerator {
        ? "14. Environment Variables: Every generated Page Object file MUST start with `import 'dotenv/config';` as the very first line, so `process.env.*` values from `.env` are available at runtime."
        : "14. Environment Variables: Do NOT inject `import 'dotenv/config';`. Use the project's native configuration strategy as inferred from existing Page Objects or Utility helpers.";
 
+    // Detect if BasePage exists in the project
+    const hasBasePage = analysisResult.existingPageObjects.some(
+      p => p.className === 'BasePage' || p.path?.includes('BasePage')
+    );
+
+    const basePageRule = hasBasePage
+      ? `6. **Page Class Extension**: A \`BasePage\` class IS detected in this project. ALL new Page Objects MUST extend \`BasePage\` by importing from the correct relative path. Inherit and reuse its \`navigate()\`, \`waitForStable()\`, \`checkAccessibility()\` methods.`
+      : `6. **Page Class Extension**: No \`BasePage\` is detected in this project. Do NOT attempt to extend or import \`BasePage\`. Export a plain class with a \`constructor(protected page: Page) {}\` signature and self-contained Playwright API calls.`;
+
     let instructContent = `[SYSTEM INSTRUCTION: MCP TEST GENERATION]
 You are a highly capable QA automation engineer.
 Your task is to generate a Playwright-BDD + POM test suite for the following description:
@@ -86,6 +95,7 @@ Your task is to generate a Playwright-BDD + POM test suite for the following des
 Target Project Root: ${projectRoot}
 Base URL (optional): ${baseUrl || 'none'}
 Playwright-BDD Present: ${analysisResult.bddSetup.present}
+BasePage Detected: ${hasBasePage}
 ${envContext}
 ${userContext}
 
@@ -101,7 +111,7 @@ ${analysisResult.existingTestData ? [...analysisResult.existingTestData.payloads
 3. Reuse existing POM methods from the context above whenever possible. Avoid duplicating existing logic.
 4. Semantic Step Matching & Fuzzy Adaptation: If your intent is semantically similar to an "Existing Step Pattern" listed above (e.g. "I press login" vs "I click login button"), you MUST REWRITE your requested step in the \`.feature\` file to exactly match the existing step definition. Do NOT create a duplicate step definition.
 5. Environments & URLs: Do NOT hardcode sensitive URLs or credentials in your steps. ${envStrategyRule}
-6. Custom Wrapper Enforcement: If a \`Custom Wrapper\` is present in the context above, you MUST import and extend it for any newly generated Page Objects. Furthermore, you MUST explicitly prefer using the Wrapper's exposed methods (for navigation, clicking, typing, asserting) over native Playwright APIs (\`this.page.click()\`, \`expect()\`) whenever the wrapper provides a suitable abstraction. If the wrapper wasn't resolved (see WARNING in context), try to guess its API based on typical patterns, or fallback to native Playwright APIs while aggressively commenting in the generated code that the user needs to install the missing package.
+${basePageRule}
 7. Asynchronous Auto-Waiting: Unless handled by a Custom Wrapper, Page Object methods MUST use Playwright's web-first assertions (e.g. \`await expect(this.btn).toBeVisible()\`) to prevent race conditions during page transitions.
 8. Data-Driven Testing: Default to generating Gherkin \`Scenario Outline:\` with an \`Examples:\` data table when dealing with user inputs, rather than hardcoding static data inside the steps.
 9. Strict Assertions: Every \`Then\` step MUST contain at least one valid assertion (via wrapper or Playwright \`expect\`) verifying a visible DOM state. URL assertions alone are insufficient.
@@ -120,20 +130,17 @@ ${dotenvImportRule}
 18. Mid-Test HTTP & Auth: For pure API calls, extract the \`request\` fixture (\`async ({ page, request }) => {...}\`).
     - **Payloads**: NEVER hardcode massive JSON bodies in Gherkin text. If the user step says \`using payload "fixtures/file.json"\`, you MUST extract the body using \`JSON.parse(fs.readFileSync(path, 'utf8'))\` dynamically inside the step definition.
     - **Authentication**: NEVER hardcode API tokens or secrets in Gherkin. If the step mentions "Bearer token", "Basic auth", etc., construct the \`Authorization\` header dynamically in the step definition using \`process.env\` variables (e.g., \`Authorization: Bearer \${process.env.API_TOKEN}\`).
-19. TypeScript DTOs & Models: If handling complex API JSON payloads/responses, or if the user requests strong typing, NEVER use implicit \`any\`. You MUST generate a TypeScript \`export interface ...\` file representing the data shape and save it in the \`models/\` directory. Use these DTOs to:
-    - **Assertions**: Import and cast responses to the Interface for type-safe compile-time assertions.
-    - **Modification**: Use the Interface to construct or modify JSON bodies before fulfilling a routed request (e.g., \`route.fulfill({ body: JSON.stringify(modifiedObj) })\`).
-    - **Reuse**: Encapsulate complex validation logic or payload generation within these model types.
-20. Step-Level Context & Fixtures: You MUST use the native Playwright-BDD destructuring (\`async ({ page, myPage }) => { ... }\`) within EVERY step definition. NEVER store the \`page\` object in a module-level variable or class constructor that persists across steps. This ensures strict state isolation and reliable parallel execution.
-21. Spec File Guard: You are EXPLICITLY FORBIDDEN from generating or modifying any \`.spec.ts\` files (e.g., those in \`.features-gen/\`). These files are managed by the \`npx bddgen\` command. Only modify features, steps, and Page Objects.
-22. Advanced Page Stability: Before taking any screenshot (\`takeScreenshot\`) or performing an action after a tab switch/navigation, you MUST inject logic to verify the page is fully loaded and "stable" (e.g., checking for the absence of loading spinners or waiting for a specific anchor element).
-23. Ad & Popup Interception: If the test description implies a public-facing site known for intrusive ads/popups, you MUST include a "Setup" block or a shared utility method in your Page Objects to identify and close common overlays (e.g., \`this.header.closePopup()\`) before proceeding with the main flow.
-24. Intelligent Feature Merging: If you are asked to create a scenario that logically belongs to an existing feature file (see context for \`Existing Features\`), you MUST return the content of the existing file with the NEW scenario appended to the end, rather than creating a duplicate \`new-feature-2.feature\` file. Do NOT delete existing scenarios.
-25. POM Enforcement for Wrappers: Even if a Custom Wrapper provides high-level actions (like \`BasePage.clickButton()\`), you MUST still generate a project-specific Page Object class (e.g., \`pages/LoginPage.ts\` extending \`BasePage\`) and encapsulate the UI logic in specific methods (e.g., \`submitLogin()\`). Step definitions MUST NEVER instantiate and call the wrapper class directly (to prevent "direct-to-wrapper" anti-pattern).
-26. Test Data Reuse Excellence: You MUST prioritize reusing the existing test data structures provided in context. If a similar data shape exists, use it via \`fs.readFileSync\` or dynamic imports instead of generating new mock JSON files or interfaces.
-27. Automated Accessibility: If the user description mentions "accessibility", "WCAG", "a11y", or "compliance", or if it's a critical page transition, you MUST include a \`Then I check accessibility of the page\` step. This maps to \`await pageObject.checkAccessibility()\` which is inherited from \`BasePage\`.
-28. TSConfig Autowiring: If your implementation creates a NEW top-level architectural directory (e.g., \`models/\`, \`types/\`, \`helpers/\`), you MUST also actively update \`tsconfig.json\` in the target project via standard file editing tools. You must append the corresponding path alias (e.g., \`"@models/*": ["./models/*"]\`) to \`compilerOptions.paths\`, and ENSURE your newly generated TypeScript files strictly use that alias in their imports.
-29. **[PHASE 4: STATE-MACHINE MICRO-PROMPTING]**: If this request requires generating a very large Page Object AND complex step definitions simultaneously across multiple files, you MUST serialize your work. Generate and invoke \`validate_and_write\` for ONLY the \`jsonPageObjects\` first. Wait for the compilation success response before generating the \`.feature\` and \`.steps.ts\` files in a subsequent attempt. Do NOT overwhelm your context window.
+19. TypeScript DTOs & Models: If handling complex API JSON payloads/responses, or if the user requests strong typing, NEVER use implicit \`any\`. You MUST generate a TypeScript \`export interface ...\` file representing the data shape and save it in the \`models/\` directory.
+20. Step-Level Context & Fixtures: You MUST use the native Playwright-BDD destructuring (\`async ({ page, myPage }) => { ... }\`) within EVERY step definition. NEVER store the \`page\` object in a module-level variable or class constructor that persists across steps.
+21. Spec File Guard: You are EXPLICITLY FORBIDDEN from generating or modifying any \`.spec.ts\` files (e.g., those in \`.features-gen/\`). These files are managed by the \`npx bddgen\` command.
+22. Advanced Page Stability: Before taking any screenshot or performing an action after a tab switch/navigation, you MUST inject logic to verify the page is fully loaded.
+23. Ad & Popup Interception: If the test description implies a public-facing site with intrusive ads/popups, include a shared utility method to identify and close common overlays before proceeding.
+24. Intelligent Feature Merging: If you are asked to create a scenario that logically belongs to an existing feature file, you MUST return the content of the existing file with the NEW scenario appended to the end, rather than creating a duplicate file. Do NOT delete existing scenarios.
+25. POM Enforcement for Wrappers: Even if a Custom Wrapper provides high-level actions, you MUST still generate a project-specific Page Object class and encapsulate the UI logic in specific methods. Step definitions MUST NEVER instantiate and call the wrapper class directly.
+26. Test Data Reuse: You MUST prioritize reusing the existing test data structures provided in context.
+27. Automated Accessibility: If the user description mentions "accessibility", "WCAG", "a11y", or "compliance", include a \`Then I check accessibility of the page\` step that maps to \`await pageObject.checkAccessibility()\`.
+28. TSConfig Autowiring: If your implementation creates a NEW top-level architectural directory (e.g., \`models/\`, \`types/\`, \`helpers/\`), you MUST update \`tsconfig.json\` to add the corresponding path alias.
+29. **[PHASE 4: STATE-MACHINE MICRO-PROMPTING]**: If this request requires generating a very large Page Object AND complex step definitions simultaneously, serialize your work. Generate and invoke \`validate_and_write\` for ONLY the \`jsonPageObjects\` first. Wait for compilation success before generating the \`.feature\` and \`.steps.ts\` files.
 
 ${memoryPrompt}
 
@@ -142,8 +149,10 @@ ${memoryPrompt}
   \`\`\`typescript
   import { createBdd } from 'playwright-bdd';
   import { test } from '@playwright/test';
-  const { Given, When, Then } = createBdd();
+  const { Given, When, Then } = createBdd(test);
   \`\`\`
+- Standard Playwright APIs (test, expect, Page, Locator, etc.) MUST be imported from \`@playwright/test\`.
+- NEVER import \`test\` or \`expect\` from \`playwright-bdd\` — they belong to \`@playwright/test\`, which is installed implicitly by \`playwright-bdd\`.
 - Do NOT import from \`@cucumber/cucumber\`.
 - In your explanation string, remind the user that they must run \`npx bddgen\` to generate the test files, followed by \`npx playwright test\`.
 
@@ -164,8 +173,8 @@ Your entire response must be a single JSON object with this shape. DO NOT write 
     {
       "className": "NewPage",
       "path": "pages/NewPage.ts",
-      "extendsClass": "BasePage",
-      "imports": ["import { BasePage } from './BasePage';"],
+      "extendsClass": ${hasBasePage ? '"BasePage"' : 'null'},
+      "imports": [${hasBasePage ? '"import { BasePage } from \'./BasePage\';"' : '"import { Page } from \'@playwright/test\';"'}],
       "locators": [
          { "name": "submitBtn", "selector": "#submit" }
       ],

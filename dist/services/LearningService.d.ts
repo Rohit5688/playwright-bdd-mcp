@@ -27,5 +27,12 @@ export declare class LearningService {
      * meant to be injected into the MCP's generation prompts (Migration, BDD scaffolding, etc).
      */
     getKnowledgePromptInjection(projectRoot: string, dynamicDirectives?: string[]): string;
+    /** Deletes a specific rule by ID. Returns true if found and removed. */
+    forget(projectRoot: string, ruleId: string): boolean;
+    /**
+     * Exports the learning brain as a human-readable Markdown document.
+     * Called by the export_team_knowledge tool.
+     */
+    exportToMarkdown(projectRoot: string): string;
 }
 //# sourceMappingURL=LearningService.d.ts.map
