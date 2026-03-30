@@ -73,7 +73,7 @@ The `SuiteSummaryService` provides a plain-English, executive-level view of the 
 
 To ensure this context is available in future sessions:
 1.  **Knowledge Export**: 
-    - AppForge rules: `AppForge/.appium-mcp/mcp-learning.md`.
+    - AppForge rules: `AppForge/.AppForge/mcp-learning.md`.
     - TestForge rules: `TestForge/docs/team-knowledge.md`.
 2.  **Conversation Logs**: Raw transcript is stored at: `C:\Users\Rohit\mcp\TestForge\.gemini\antigravity\brain\213f5c46-2056-4baf-8900-39416a67e6c5\.system_generated\logs\overview.txt`.
 

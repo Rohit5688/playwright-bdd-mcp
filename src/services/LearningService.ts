@@ -19,7 +19,7 @@ export class LearningService {
    * Defines the storage location for the autonomous learning brain inside the user's project.
    */
   private getStoragePath(projectRoot: string): string {
-    const dir = path.join(projectRoot, '.playwright-bdd-mcp');
+    const dir = path.join(projectRoot, '.TestForge');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }

@@ -2,7 +2,7 @@
 
 The Playwright BDD MCP Server doesn't just write code; it Learns from your team. As it generates UI tests, an LLM might repeatedly miss a specific idiosyncrasy of your application (like relying on `#shadow-root` or an obscure frontend framework). 
 
-This MCP has a persistent localized memory (`.playwright-bdd-mcp/mcp-learning.json`) that overridingly modifies all future AI generations to prevent repeat mistakes.
+This MCP has a persistent localized memory (`.TestForge/mcp-learning.json`) that overridingly modifies all future AI generations to prevent repeat mistakes.
 
 ## `train_on_example`
 If an AI generates a bad Page Object syntax, and you fix it, you can explicitly teach the AI your fix. 
@@ -24,7 +24,7 @@ test('Open Profile', async ({ page }) => {
 During the `analyze_codebase` phase, the MCP will dynamically extract these comments and inject them into the LLM context. This means humans can silently leave "Rule Zeros" across the repository, and the AI will adhere to them without any explicit prompts.
 
 ## `export_team_knowledge`
-As your AI tests application over weeks and months, the `.playwright-bdd-mcp/mcp-learning.json` file will grow. Because this file is just raw JSON, it's hard for managers or manual QA testers to read.
+As your AI tests application over weeks and months, the `.TestForge/mcp-learning.json` file will grow. Because this file is just raw JSON, it's hard for managers or manual QA testers to read.
 
 By executing this tool, the MCP will convert its entire brain into a human-readable Markdown document (`docs/team-knowledge.md`). 
 

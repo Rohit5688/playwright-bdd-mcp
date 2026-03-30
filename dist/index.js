@@ -982,7 +982,7 @@ h3. Next Steps
                 if (!fs.existsSync(docsDir))
                     fs.mkdirSync(docsDir, { recursive: true });
                 const filePath = path.join(docsDir, 'team-knowledge.md');
-                let md = `# Autonomous AI QA Brain\n\nThis document was automatically generated from \`.playwright-bdd-mcp/mcp-learning.json\`. These are the custom rules the AI has learned from human corrections.\n\n`;
+                let md = `# Autonomous AI QA Brain\n\nThis document was automatically generated from \`.TestForge/mcp-learning.json\`. These are the custom rules the AI has learned from human corrections.\n\n`;
                 brain.rules.forEach((r, idx) => {
                     md += `## Rule ${idx + 1}: ${r.pattern}\n**Action**: ${r.solution}\n**Tags**: ${r.tags.join(', ')}\n**Learned On**: ${r.timestamp}\n\n`;
                 });

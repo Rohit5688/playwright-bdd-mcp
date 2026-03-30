@@ -37,12 +37,12 @@
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ForgeTest-AI/TestForge.git"
+    "url": "https://github.com/Rohit5688/TestForge.git"
   },
   "bugs": {
-    "url": "https://github.com/ForgeTest-AI/TestForge/issues"
+    "url": "https://github.com/Rohit5688/TestForge/issues"
   },
-  "homepage": "https://github.com/ForgeTest-AI/TestForge#readme",
+  "homepage": "https://github.com/Rohit5688/TestForge#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "commander": "^14.0.3",

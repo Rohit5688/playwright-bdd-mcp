@@ -65,7 +65,7 @@ In both the CLI `upgrade` command (`src/index.ts:633`) and `ProjectMaintenanceSe
 **Objective**: Establish a remote Git repository and refine DTO logic for response modification.
 
 **Proposed Changes**:
-1. **Git Initialization**: Connect local project to `https://github.com/Rohit5688/playwright-bdd-mcp.git`.
+1. **Git Initialization**: Connect local project to `https://github.com/Rohit5688/TestForge.git`.
 2. **DTO Refinement**: Instruct the AI to use DTOs to intercept and modify JSON bodies before fulfilling a routed request.
 
 ---
