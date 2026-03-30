@@ -92,8 +92,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
+        name: "workflow_guide",
+        description: "WHEN TO USE: Call this tool immediately when the USER asks you to start a complex, multi-step task like 'setup a new project', 'migrate a test', or 'build a test suite'. WHAT IT DOES: Returns the official LLM Operating System blueprint containing deterministic, loop-free chains of tools required to accomplish major TestForge objectives. HOW IT WORKS: You provide the objective (e.g., 'scaffold', 'generate', 'migrate', 'heal', 'ci'), and it gives you the exact ordered array of tools you MUST call to succeed without entering infinite loops or missing required setup configuration.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            objective: {
+              type: "string",
+              enum: ["scaffold", "generate", "migrate", "heal", "ci"],
+              description: "The phase of automation you are trying to achieve."
+            }
+          },
+          required: ["objective"]
+        }
+      },
+      {
         name: "analyze_codebase",
-        description: "⚠️ TOKEN-INTENSIVE (LEGACY): Analyzes the entire codebase. Only use this for very small projects (< 5 files). FOR LARGE PROJECTS, ALWAYS USE 'execute_sandbox_code' (Turbo Mode) instead to save up to 98% in tokens.",
+        description: "WHEN TO USE: To scan existing codebase structure before generating code. WHAT IT DOES: Analyzes the codebase using AST. Only use this for very small projects (< 5 files). FOR LARGE PROJECTS, ALWAYS USE 'execute_sandbox_code' (Turbo Mode) instead. HOW IT WORKS: Provide projectRoot.",
         inputSchema: {
           type: "object",
           properties: {
@@ -105,7 +120,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "generate_gherkin_pom_test_suite",
-        description: "Returns a rigid system instruction context to the client LLM, ensuring the chat completion generates the requested Playwright-BDD JSON structure based on previously analyzed context.",
+        description: "WHEN TO USE: To generate a standard Playwright BDD test suite. WHAT IT DOES: Generates feature files and POM instructions. HOW IT WORKS: Returns a rigid system instruction context to the client LLM, ensuring the chat completion generates the requested Playwright-BDD JSON structure based on previously analyzed context.",
         inputSchema: {
           type: "object",
           properties: {
@@ -119,7 +134,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "run_playwright_test",
-        description: "Executes the Playwright-BDD test suite natively. Use this tool AFTER generating the test files to verify if they compile and pass. It runs `npm test` and returns the terminal output (success or failure logs).",
+        description: "WHEN TO USE: AFTER generating or updating tests to verify they pass. WHAT IT DOES: Executes the Playwright-BDD test suite natively. HOW IT WORKS: It runs npm test or the specified command and returns the terminal output.",
         inputSchema: {
           type: "object",
           properties: {
@@ -133,7 +148,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "upgrade_project",
-        description: "Upgrades an existing Playwright-BDD project to support the latest MCP features (config, user stores, etc.). Safe and additive.",
+        description: "WHEN TO USE: To migrate or maintain older setups. WHAT IT DOES: Upgrades an existing Playwright-BDD project to support the latest MCP features (config, user stores, etc.). HOW IT WORKS: Safe and additive idempotent operation.",
         inputSchema: {
           type: "object",
           properties: {
@@ -144,7 +159,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "inspect_page_dom",
-        description: "Navigates to a target URL in a headless browser and returns the Accessibility Tree (semantic DOM). Use this tool to extract exact locators (names, roles, test ids) BEFORE writing Page Objects to ensure 100% accuracy.",
+        description: "WHEN TO USE: BEFORE generating Page Objects. WHAT IT DOES: Navigates to a target URL in a headless browser and returns the Accessibility Tree (semantic DOM). HOW IT WORKS: Extracts exact locators (names, roles, test ids) to ensure 100% accuracy.",
         inputSchema: {
           type: "object",
           properties: {
@@ -171,7 +186,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "self_heal_test",
-        description: "Analyzes Playwright test failure output to determine if the failure is a SCRIPTING issue (bad locator) or an APPLICATION issue (wrong data). For scripting failures, it returns a targeted heal instruction telling the AI exactly which locator to fix and how to re-inspect the live DOM to get the correct selector.",
+        description: "WHEN TO USE: After a run_playwright_test fails. WHAT IT DOES: Analyzes Playwright test failure output to determine if it's a SCRIPTING issue or an APPLICATION issue. HOW IT WORKS: Returns a targeted heal instruction telling the AI exactly which locator to fix and how to re-inspect the live DOM.",
         inputSchema: {
           type: "object",
           properties: {
@@ -183,7 +198,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "validate_and_write",
-        description: "Writes the AI-generated test files to disk, runs them, and if they fail, attempts self-healing up to 3 times. On each failure it classifies the root cause (locator, sync, or app bug) and returns a targeted fix instruction. After 3 exhausted attempts it returns a friendly message asking the human to investigate.",
+        description: "WHEN TO USE: After generating code content in memory. WHAT IT DOES: Writes the AI-generated test files to disk, runs them, and attempts auto-healing up to 3 times on failure. HOW IT WORKS: You pass the structured files to write as an array.",
         inputSchema: {
           type: "object",
           properties: {
@@ -224,7 +239,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "manage_env",
-        description: "Reads, writes, or scaffolds the .env file for a test project. Use 'read' to discover existing env keys before code generation. Use 'write' to upsert new keys (URL, credentials). Use 'scaffold' to create a starter .env with sensible BDD defaults. Automatically manages .env.example and .gitignore.",
+        description: "WHEN TO USE: To discover existing keys or upsert new credentials. WHAT IT DOES: Reads, writes, or scaffolds the .env file. HOW IT WORKS: Pass action 'read', 'write', or 'scaffold'. Automatically manages .env.example",
         inputSchema: {
           type: "object",
           properties: {
@@ -248,7 +263,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "setup_project",
-        description: "Bootstraps a new or empty directory into a fully configured Playwright-BDD project. Creates features/, pages/, step-definitions/ structure, installs npm packages (playwright-bdd, typescript, dotenv, faker), writes playwright.config.ts, tsconfig.json, and scaffolds a .env file. Call this FIRST when a user starts a brand-new test project.",
+        description: "WHEN TO USE: First time setting up a new TestForge environment. WHAT IT DOES: Bootstraps an empty directory into a fully configured Playwright-BDD project. HOW IT WORKS: Creates necessary structure, installs npm packages, and writes config files.",
         inputSchema: {
           type: "object",
           properties: {
@@ -259,7 +274,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "repair_project",
-        description: "Repair and restore missing baseline files after a partial or interrupted setup_project run. Safe to run at any time — only generates files that are missing and never overwrites existing ones.",
+        description: "WHEN TO USE: After an interrupted setup. WHAT IT DOES: Repair and restore missing baseline files safely. HOW IT WORKS: Generates files that are missing without overwriting existing ones.",
         inputSchema: {
           type: "object",
           properties: {
@@ -270,7 +285,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "summarize_suite",
-        description: "Reads all .feature files in the project and returns a plain-English summary of the test suite: feature names, scenario titles, tag breakdown (@smoke/@regression/@e2e counts), and ready-to-run selective test commands. Useful for stakeholder reports and coverage reviews.",
+        description: "WHEN TO USE: To get an overview of the current test suite. WHAT IT DOES: Reads all .feature files and returns a plain-English summary. HOW IT WORKS: Provides tag breakdown and ready-to-run selective test commands.",
         inputSchema: {
           type: "object",
           properties: {
@@ -281,7 +296,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "manage_config",
-        description: "Reads, writes, or scaffolds the mcp-config.json for a test project. Controls team-level preferences: allowed tags, directory layout, env variable names, browser list, timeout, auth strategy, and environments. Call 'scaffold' once during setup, then 'write' to update settings.",
+        description: "WHEN TO USE: To read, write, or scaffold project configurations. WHAT IT DOES: Interacts with mcp-config.json. HOW IT WORKS: Pass exactly the action (read, write, or scaffold) and partial config to map.",
         inputSchema: {
           type: "object",
           properties: {
@@ -294,7 +309,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "manage_users",
-        description: "Manages environment-specific user credential stores in test-data/users.{env}.json. Use 'scaffold' for first-time setup (creates admin/standard/readonly roles). Use 'add-role' to add new roles. Use 'list' to see existing roles. Also generates a typed user-helper.ts so Page Objects call getUser('admin') instead of process.env.USERNAME.",
+        description: "WHEN TO USE: Manage multi-environment test users. WHAT IT DOES: Modifies users.{env}.json. HOW IT WORKS: Replaces specific values for accounts.",
         inputSchema: {
           type: "object",
           properties: {
@@ -308,7 +323,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "migrate_from_selenium",
-        description: "Returns a rigid system instruction context to the client LLM, ensuring the chat completion correctly translates legacy Java/Python/JS Selenium code into strict TypeScript Playwright-BDD code, automatically applying correct wait strategies, iframe scopes, and window handlers.",
+        description: "WHEN TO USE: To port legacy scripts. WHAT IT DOES: Translates legacy Java/Python/JS Selenium code into strict TypeScript Playwright-BDD. HOW IT WORKS: Returns a rigid system prompt back.",
         inputSchema: {
           type: "object",
           properties: {
@@ -321,7 +336,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "suggest_refactorings",
-        description: "Analyzes the codebase to find duplicate step definitions and unused Page Object methods. Returns a structured JSON/Markdown plan for pruning and consolidating the test suite. Call this periodically during a session to keep the codebase clean.",
+        description: "WHEN TO USE: To keep the codebase clean. WHAT IT DOES: Analyzes the codebase to find duplicate step definitions and unused Page Object methods. HOW IT WORKS: Returns a structured JSON/Markdown plan for pruning and consolidating the test suite.",
         inputSchema: {
           type: "object",
           properties: {
@@ -332,7 +347,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "generate_fixture",
-        description: "Generates strict system instructions to help the LLM create a Playwright test fixture and a Faker.js data factory for typed mock data generation.",
+        description: "WHEN TO USE: To mock backend or entity data. WHAT IT DOES: Generates strict system instructions to help the LLM create a Playwright test fixture. HOW IT WORKS: Returns a prompt to create a typed Faker.js data factory.",
         inputSchema: {
           type: "object",
           properties: {
@@ -344,7 +359,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "update_visual_baselines",
-        description: "Executes the Playwright test suite with the --update-snapshots flag to rebaseline any visual regression failures (toHaveScreenshot).",
+        description: "WHEN TO USE: To resolve visual regression failures. WHAT IT DOES: Executes the Playwright test suite with the --update-snapshots flag. HOW IT WORKS: Rebaselines any toHaveScreenshot image mismatches natively.",
         inputSchema: {
           type: "object",
           properties: {
@@ -357,7 +372,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "request_user_clarification",
-        description: "CRITICAL: Call this tool when you encounter an architectural ambiguity or missing requirement that prevents you from confidently generating code. This returns a strict SYSTEM HALT directive forcing the AI Host Client to stop, prompt the human user with your question, and wait for their answer before continuing.",
+        description: "WHEN TO USE: CRITICAL: Call this tool when you encounter an architectural ambiguity or missing requirement. WHAT IT DOES: Halts execution to prompt the human user with your question. HOW IT WORKS: Returns a strict SYSTEM HALT directive and waits for their answer.",
         inputSchema: {
           type: "object",
           properties: {
@@ -370,7 +385,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "train_on_example",
-        description: "Injects custom team knowledge or learned coding fixes into the persistent MCP memory. Use this whenever the user explicitly corrects a Playwright execution error, so the AI does not repeat the same scripting mistake in future generations.",
+        description: "WHEN TO USE: After manually correcting an AI generation error. WHAT IT DOES: Injects custom team knowledge or learned coding fixes into the persistent MCP memory. HOW IT WORKS: Ensures the AI does not repeat the same scripting mistake in future generations.",
         inputSchema: {
           type: "object",
           properties: {
@@ -384,7 +399,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "generate_ci_pipeline",
-        description: "Generates a fully-configured CI/CD pipeline template (GitHub Actions, GitLab CI, or Jenkins) tailored for Playwright-BDD, including HTML report publishing.",
+        description: "WHEN TO USE: To finalize a project setup on Github/Gitlab. WHAT IT DOES: Generates a fully-configured CI/CD pipeline template. HOW IT WORKS: Writes directly to disk the standard CI yaml.",
         inputSchema: {
           type: "object",
           properties: {
@@ -399,7 +414,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "export_jira_bug",
-        description: "Generates a Jira-formatted bug report from a failed Playwright test, including file paths to the Playwright Trace and Video recordings.",
+        description: "WHEN TO USE: When a failed test needs tracking. WHAT IT DOES: Generates a Jira-formatted bug report from a failed Playwright test. HOW IT WORKS: Incorporates file paths to the Playwright Trace and Video recordings.",
         inputSchema: {
           type: "object",
           properties: {
@@ -411,7 +426,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "export_team_knowledge",
-        description: "Exports the AI's internal mcp-learning.json brain into a human-readable Markdown file so the engineering team can review the autonomously learned rules.",
+        description: "WHEN TO USE: To share the AI's internal knowledge base. WHAT IT DOES: Exports the mcp-learning.json brain into a human-readable Markdown file. HOW IT WORKS: Writes to a document so the team can review autonomously learned rules.",
         inputSchema: {
           type: "object",
           properties: {
@@ -422,7 +437,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "analyze_coverage_gaps",
-        description: "Analyzes istanbul/v8 LCOV coverage metrics to identify deeply untested branches, returning strict LLM instructions to generate the missing Playwright-BDD features.",
+        description: "WHEN TO USE: After generating coverage reports to find specific test gaps. WHAT IT DOES: Analyzes istanbul/v8 LCOV coverage metrics to identify deeply untested branches. HOW IT WORKS: Returns strict LLM instructions to generate the missing Playwright-BDD features.",
         inputSchema: {
           type: "object",
           properties: {
@@ -433,7 +448,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "start_session",
-        description: "Starts a persistent Playwright browser session in the background. Call this at the start of interactive or multi-step tasks to avoid launching a new browser per action.",
+        description: "WHEN TO USE: Start of interactive or multi-step tasks. WHAT IT DOES: Starts a persistent Playwright browser session in the background. HOW IT WORKS: Avoids launching a new browser per action. Returns context.",
         inputSchema: {
           type: "object",
           properties: {
@@ -444,7 +459,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "end_session",
-        description: "Ends the persistent Playwright browser session.",
+        description: "WHEN TO USE: To close an interactive context. WHAT IT DOES: Ends the persistent Playwright browser session. HOW IT WORKS: Cleans up the background browser context.",
         inputSchema: {
           type: "object",
           properties: {}
@@ -452,7 +467,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "navigate_session",
-        description: "Navigates the persistent session to a target URL.",
+        description: "WHEN TO USE: To re-route an active session context. WHAT IT DOES: Navigates the persistent session to a target URL. HOW IT WORKS: Invokes Playwright page.goto() live.",
         inputSchema: {
           type: "object",
           properties: {
@@ -463,7 +478,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "verify_selector",
-        description: "TESTS a CSS/XPath selector LIVE in the persistent browser without running a full script. Use this to proactively guarantee your generated locators are valid, visible, and enabled before saving them to a Page Object.",
+        description: "WHEN TO USE: To proactively guarantee loactors before writing. WHAT IT DOES: TESTS a CSS/XPath selector LIVE in the persistent browser without running a full script. HOW IT WORKS: Ensures locators are valid, visible, and enabled prior to Page Object saving.",
         inputSchema: {
           type: "object",
           properties: {
@@ -474,7 +489,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "execute_sandbox_code",
-        description: "🚀 TURBO MODE (RECOMMENDED): Execute a JavaScript snippet inside a secure V8 sandbox to analyze code, find existing steps, or inspect DOMs. Use this tool FOR ALL RESEARCH AND ANALYSIS tasks to prevent token overflow. The script has access to `forge.api.*` and returns only the filtered data you need. Available APIs: forge.api.inspectDom(url), forge.api.analyzeCodebase(projectRoot), forge.api.runTests(projectRoot).",
+        description: "WHEN TO USE: FOR ALL RESEARCH AND ANALYSIS tasks (🚀 TURBO MODE RECOMMENDED). WHAT IT DOES: Execute a JavaScript snippet inside a secure V8 sandbox to analyze code, find existing steps, or inspect DOMs. HOW IT WORKS: The script has access to forge.api.* and returns only the filtered data you need.",
         inputSchema: {
           type: "object",
           properties: {
@@ -486,7 +501,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "check_environment",
-        description: "Pre-flight check: verify Node.js version, @playwright/test installed, browser binaries downloaded, playwright.config.ts present, mcp-config.json, node_modules, and BASE_URL reachability.",
+        description: "WHEN TO USE: Pre-flight check. WHAT IT DOES: Verifies Node.js version, Playwright installation, browsers, and configs. HOW IT WORKS: Returns the environment readiness state as structured JSON.",
         inputSchema: {
           type: "object",
           properties: {
@@ -498,7 +513,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "audit_locators",
-        description: "Scan Page Objects and audit locator strategies. Flags brittle XPath and legacy page.$() calls as critical, CSS class/ID selectors as warnings, and semantic getBy* locators as stable. Returns a Markdown health report.",
+        description: "WHEN TO USE: To verify locator health across the project. WHAT IT DOES: Scans Page Objects and flags brittle strategies. HOW IT WORKS: Returns a Markdown health report.",
         inputSchema: {
           type: "object",
           properties: {
@@ -510,7 +525,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "audit_utils",
-        description: "Scans the project utils layer (utils/, helpers/, support/) against the Playwright API surface map and reports missing helper methods. Custom-wrapper-aware: methods provided by a custom wrapper package (e.g. @company/playwright-base) are counted as present and NOT listed as missing. Use this to discover what helper utilities still need to be implemented.",
+        description: "WHEN TO USE: To check for missing Playwright API surface wrappers. WHAT IT DOES: Scans the utils layer to report missing helper methods. HOW IT WORKS: Custom-wrapper-aware, counts implemented actions.",
         inputSchema: {
           type: "object",
           properties: {
@@ -529,6 +544,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
+      case "workflow_guide": {
+        const { objective } = args as any;
+        const workflows: Record<string, string> = {
+          scaffold: "1. setup_project -> 2. manage_config (scaffold) -> 3. manage_env (scaffold) -> 4. manage_users (scaffold)",
+          generate: "1. analyze_codebase (or execute_sandbox_code) -> 2. inspect_page_dom (optional) -> 3. generate_gherkin_pom_test_suite -> 4. validate_and_write (auto-tests internally)",
+          migrate: "1. migrate_from_selenium -> 2. validate_and_write",
+          heal: "1. run_playwright_test -> 2. inspect_page_dom -> 3. self_heal_test -> 4. validate_and_write",
+          ci: "1. generate_ci_pipeline"
+        };
+        const blueprint = workflows[objective as string] || "Unknown objective. Use scaffold, generate, migrate, heal, or ci.";
+        const response = JSON.stringify({
+           action: "WORKFLOW_BLUEPRINT_RETRIEVED",
+           objective,
+           blueprint,
+           hint: `Follow these steps exactly in order. Proceed immediately to step 1 of ${objective}.`
+        }, null, 2);
+        return { content: [{ type: "text", text: response }] };
+      }
+
       case "analyze_codebase": {
         const { projectRoot, customWrapperPackage } = args as any;
         await maintenance.ensureUpToDate(projectRoot);
@@ -632,7 +666,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "summarize_suite": {
         const { projectRoot } = args as any;
         const report = suiteSummary.summarize(projectRoot);
-        return { content: [{ type: "text", text: report.plainEnglishSummary }] };
+        const responseText = JSON.stringify({
+          action: "SUITE_SUMMARIZED",
+          summary: report.plainEnglishSummary,
+          hint: "Use 'run_playwright_test' with specificTestArgs to run any listed tests."
+        }, null, 2);
+        return { content: [{ type: "text", text: responseText }] };
       }
 
       case "inspect_page_dom": {
@@ -783,12 +822,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await projectSetup.setup(projectRoot);
         const cfg = mcpConfig.scaffold(projectRoot);
         const userResults = userStore.scaffold(projectRoot, cfg.environments);
-        const envCount = Object.values(userResults).reduce((acc, r) => acc + r.added.length, 0);
+        const envCount = Object.values(userResults).reduce((acc: number, r: any) => acc + r.added.length, 0);
         const setupMsg = result.message +
           `\n\n✅ mcp-config.json scaffolded (edit to customise tags, browsers, timeouts, auth strategy)` +
           `\n✅ User stores created for environments: ${cfg.environments.join(', ')} (${envCount} roles each)` +
           `\n   Fill in passwords in test-data/users.{env}.json — those files are git-ignored for safety.`;
-        return { content: [{ type: "text", text: setupMsg }] };
+        const responseText = JSON.stringify({
+          action: "PROJECT_SCAFFOLDED",
+          output: setupMsg,
+          hint: "Project is scaffolded. Proceed to 'manage_config' or 'manage_env' to customize."
+        }, null, 2);
+        return { content: [{ type: "text", text: responseText }] };
       }
 
       case "manage_env": {
@@ -976,7 +1020,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "start_session": {
         const result = await sessionService.startSession(args as any);
-        return { content: [{ type: "text", text: result }] };
+        const responseText = JSON.stringify({
+          action: "SESSION_STARTED",
+          status: "SUCCESS",
+          details: result,
+          hint: "Session is active. You can now use 'navigate_session' or 'verify_selector'."
+        }, null, 2);
+        return { content: [{ type: "text", text: responseText }] };
       }
 
       case "end_session": {
@@ -1125,8 +1175,17 @@ h3. Next Steps
 
       case "check_environment": {
         const { projectRoot, baseUrl } = args as any;
-        const report = await envCheckService.check(projectRoot, baseUrl);
-        return { content: [{ type: "text", text: report.summary }] };
+        const report = await envCheckService.check(projectRoot, baseUrl) as any;
+        const failCount = report.failCount !== undefined ? report.failCount : 0;
+        const warnCount = report.warnCount !== undefined ? report.warnCount : 0;
+        const responseText = JSON.stringify({
+          action: "ENVIRONMENT_CHECK_COMPLETED",
+          summary: report.summary || String(report),
+          ready: failCount === 0,
+          statusCounts: { fail: failCount, warn: warnCount },
+          hint: failCount === 0 ? "Environment is ready. Proceed to 'setup_project' or 'generate'." : "Environment issues detected. Check the summary."
+        }, null, 2);
+        return { content: [{ type: "text", text: responseText }] };
       }
 
       case "audit_locators": {
