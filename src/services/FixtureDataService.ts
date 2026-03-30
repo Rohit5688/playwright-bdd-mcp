@@ -39,7 +39,20 @@ ${schemaDefinition}
      \`\`\`
 
 4. **Output Format**:
-   - Return ONLY the raw TypeScript code block. NO conversational filler. NO explanations.
+   - Return a single valid JSON object — NO markdown fences, NO extra text.
+   - The JSON MUST match this schema exactly so the MCP \`validate_and_write\` tool can process it:
+     \`\`\`json
+     {
+       "files": [
+         {
+           "path": "fixtures/${entityName.toLowerCase()}.fixture.ts",
+           "content": "/* full TypeScript source */"
+         }
+       ]
+     }
+     \`\`\`
+   - The \`content\` string must contain the complete TypeScript: the interface, the factory function, and the extended \`test\` export.
+   - Escape all backticks and template-literal characters inside the content string correctly.
 `;
   }
 }
