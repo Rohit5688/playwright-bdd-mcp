@@ -20,7 +20,7 @@
  * Each method receives a single JSON-serializable argument and returns a
  * JSON-serializable result (or a Promise of one).
  */
-export type SandboxApiMethod = (args: any) => any | Promise<any>;
+export type SandboxApiMethod = (...args: any[]) => any | Promise<any>;
 /**
  * The registry of methods exposed to the sandbox script via `forge.api.*`.
  */

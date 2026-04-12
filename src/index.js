@@ -18,7 +18,7 @@ const domInspector = new DomInspectorService();
 const selfHealer = new SelfHealingService();
 const fileWriter = new FileWriterService();
 const server = new Server({
-    name: "playwright-bdd-pom-mcp",
+    name: "TestForge",
     version: "1.0.0",
 }, {
     capabilities: {
@@ -225,9 +225,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (runResult.passed) {
                 return {
                     content: [{
-                            type: "text",
-                            text: `✅ SUCCESS on attempt ${attempt}/${MAX_RETRIES}!\n\nAll tests passed. The following files were written and validated:\n${writtenFiles.map(f => `  - ${f}`).join('\n')}\n\nYou can now commit these files to your repository.`
-                        }]
+                        type: "text",
+                        text: `✅ SUCCESS on attempt ${attempt}/${MAX_RETRIES}!\n\nAll tests passed. The following files were written and validated:\n${writtenFiles.map(f => `  - ${f}`).join('\n')}\n\nYou can now commit these files to your repository.`
+                    }]
                 };
             }
             // STEP 4: Classify the failure
@@ -236,9 +236,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (!analysis.canAutoHeal) {
                 return {
                     content: [{
-                            type: "text",
-                            text: `⚠️ AUTO-HEAL BLOCKED after attempt ${attempt}/${MAX_RETRIES}\n\n${analysis.healInstruction}\n\nThe test failure appears to be caused by the application returning unexpected data, not a scripting error. A human needs to investigate this.`
-                        }]
+                        type: "text",
+                        text: `⚠️ AUTO-HEAL BLOCKED after attempt ${attempt}/${MAX_RETRIES}\n\n${analysis.healInstruction}\n\nThe test failure appears to be caused by the application returning unexpected data, not a scripting error. A human needs to investigate this.`
+                    }]
                 };
             }
             // STEP 5: Can heal — build the healing prompt with optional fresh DOM snapshot
@@ -256,18 +256,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (attempt < MAX_RETRIES) {
                 return {
                     content: [{
-                            type: "text",
-                            text: `🔄 ATTEMPT ${attempt}/${MAX_RETRIES} FAILED — SELF-HEALING ACTIVATED\n\n${healingContext}\n\n⚡ ACTION REQUIRED: Please fix the files listed above and call validate_and_write again with the corrected file contents. You have ${MAX_RETRIES - attempt} retries remaining.`
-                        }]
+                        type: "text",
+                        text: `🔄 ATTEMPT ${attempt}/${MAX_RETRIES} FAILED — SELF-HEALING ACTIVATED\n\n${healingContext}\n\n⚡ ACTION REQUIRED: Please fix the files listed above and call validate_and_write again with the corrected file contents. You have ${MAX_RETRIES - attempt} retries remaining.`
+                    }]
                 };
             }
         }
         // Exhausted all 3 retries
         return {
             content: [{
-                    type: "text",
-                    text: `❌ ALL ${MAX_RETRIES} ATTEMPTS EXHAUSTED\n\nDespite ${MAX_RETRIES} self-healing attempts, the tests are still failing. Here is a summary of what went wrong:\n\n${selfHealer.analyzeFailure(lastOutput).healInstruction}\n\n📋 WHAT TO DO NEXT:\n  1. Open the test-results/ folder in your project for Playwright's HTML report.\n  2. Review the failing Page Object files listed above.\n  3. Consider using the inspect_page_dom tool manually with the live URL to get fresh locators.\n  4. If the application itself has changed, update the expected values in your .feature file.\n\n🙏 Don't worry — the structure of your BDD suite is correct and all non-failing tests are green. Only the indicated locators/assertions need attention.`
-                }]
+                type: "text",
+                text: `❌ ALL ${MAX_RETRIES} ATTEMPTS EXHAUSTED\n\nDespite ${MAX_RETRIES} self-healing attempts, the tests are still failing. Here is a summary of what went wrong:\n\n${selfHealer.analyzeFailure(lastOutput).healInstruction}\n\n📋 WHAT TO DO NEXT:\n  1. Open the test-results/ folder in your project for Playwright's HTML report.\n  2. Review the failing Page Object files listed above.\n  3. Consider using the inspect_page_dom tool manually with the live URL to get fresh locators.\n  4. If the application itself has changed, update the expected values in your .feature file.\n\n🙏 Don't worry — the structure of your BDD suite is correct and all non-failing tests are green. Only the indicated locators/assertions need attention.`
+            }]
         };
     }
     throw new Error(`Tool not found: ${request.params.name}`);
@@ -298,7 +298,7 @@ async function startServer() {
         });
         const port = parseInt(options.port, 10);
         app.listen(port, options.host, () => {
-            console.log(`[playwright-bdd-pom-mcp] Remote SSE listening on http://${options.host}:${port}/sse`);
+            console.log(`[TestForge] Remote SSE listening on http://${options.host}:${port}/sse`);
         });
     }
     else {

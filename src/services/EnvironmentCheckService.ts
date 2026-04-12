@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -6,7 +6,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { Questioner } from '../utils/Questioner.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface EnvironmentCheck {
   name: string;
@@ -76,7 +76,7 @@ export class EnvironmentCheckService {
 
   private async checkNode(): Promise<EnvironmentCheck> {
     try {
-      const { stdout } = await execAsync('node --version');
+      const { stdout } = await execFileAsync('node', ['--version']);
       const version = stdout.trim();
       const major = parseInt((version.replace('v', '').split('.')[0]) ?? '0', 10);
       if (major < 18) {
@@ -172,7 +172,8 @@ export class EnvironmentCheckService {
 
     try {
       // Let playwright itself tell us
-      await execAsync('npx playwright --version', { cwd: projectRoot });
+      const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      await execFileAsync(npxCmd, ['playwright', '--version'], { cwd: projectRoot });
       return {
         name: 'Playwright Browsers',
         status: 'warn',

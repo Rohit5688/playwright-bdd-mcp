@@ -1,4 +1,4 @@
-# Phase 22: Dockerfile for Playwright-BDD-POM-MCP
+# Phase 22: Dockerfile for TestForge
 # Uses Playwright base image to ensure all browser dependencies are present.
 
 FROM mcr.microsoft.com/playwright:v1.50.1-jammy

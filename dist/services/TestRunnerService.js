@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { sanitizeShellArg } from '../utils/SecurityUtils.js';
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
 /**
  * TestRunnerService
@@ -35,13 +35,35 @@ export class TestRunnerService {
             const needsSeparator = isPackageRunner && safeArgs;
             const argsToAppend = (needsSeparator && !command.includes(' -- ')) ? `-- ${safeArgs}` : safeArgs;
             const fullCommand = `${command} ${argsToAppend}`.trim();
-            const { stdout, stderr } = await execAsync(fullCommand, {
-                cwd: projectRoot,
-                timeout: runTimeout,
-            });
+            const commandSegments = fullCommand.split('&&').map(c => c.trim()).filter(Boolean);
+            let aggregatedStdout = '';
+            let aggregatedStderr = '';
+            for (const cmdStr of commandSegments) {
+                const parts = cmdStr.split(/\s+/).filter(p => p.length > 0);
+                let exe = parts.shift();
+                if (!exe)
+                    throw new Error(`Invalid execution segment: ${cmdStr}`);
+                // Prevent path traversal in executable
+                if (exe.includes('..') || (exe.includes('/') && !exe.startsWith('/'))) {
+                    throw new Error(`Invalid executable path: ${exe}`);
+                }
+                // On Windows, package managers often need .cmd extension for execFile
+                const isWin = process.platform === 'win32';
+                if (isWin && ['npm', 'npx', 'yarn', 'pnpm', 'bun'].includes(exe)) {
+                    exe = `${exe}.cmd`;
+                }
+                const args = parts;
+                const { stdout, stderr } = await execFileAsync(exe, args, {
+                    cwd: projectRoot,
+                    timeout: runTimeout,
+                    env: { ...process.env, FORCE_COLOR: '0' }
+                });
+                aggregatedStdout += stdout + '\n';
+                aggregatedStderr += stderr + '\n';
+            }
             return {
                 passed: true,
-                output: `[SUCCESS] Tests passed!\n\nStandard Output:\n${stdout}\n\nStandard Error:\n${stderr}`
+                output: `[SUCCESS] Tests passed!\n\nStandard Output:\n${aggregatedStdout.trim()}\n\nStandard Error:\n${aggregatedStderr.trim()}`
             };
         }
         catch (error) {

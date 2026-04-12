@@ -12,5 +12,11 @@
     "forge-runner.playwright.projectRoot": "./examples/sample-project",
     "forge-runner.playwright.enableFeatureGen": true,
     "forge-runner.playwright.stepsFilePattern": "src/step-definitions/*.{js,ts,mjs,mts}",
-    "forge-runner.playwright.tsconfigPath": "tsconfig.json"
+    "forge-runner.playwright.tsconfigPath": "tsconfig.json",
+    "env": {
+        "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+        "ANTHROPIC_API_KEY": "",
+        "ANTHROPIC_AUTH+TOKEN": "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",
+        "ANTHROPIC_MODEL": "openrouter/free"
+    }
 }

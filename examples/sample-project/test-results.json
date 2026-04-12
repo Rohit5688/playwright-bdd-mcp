@@ -1,7 +1,7 @@
 {
   "config": {
-    "configFile": "C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\playwright.config.ts",
-    "rootDir": "C:/Users/Rohit/mcp/playwright-bdd-pom-mcp/examples/sample-project/.features-gen",
+    "configFile": "C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\playwright.config.ts",
+    "rootDir": "C:/Users/Rohit/mcp/TestForge/examples/sample-project/.features-gen",
     "forbidOnly": false,
     "fullyParallel": false,
     "globalSetup": null,
@@ -16,7 +16,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "C:/Users/Rohit/mcp/playwright-bdd-pom-mcp/examples/sample-project/test-results",
+        "outputDir": "C:/Users/Rohit/mcp/TestForge/examples/sample-project/test-results",
         "repeatEach": 1,
         "retries": 1,
         "metadata": {
@@ -24,7 +24,7 @@
         },
         "id": "chromium",
         "name": "chromium",
-        "testDir": "C:/Users/Rohit/mcp/playwright-bdd-pom-mcp/examples/sample-project/.features-gen",
+        "testDir": "C:/Users/Rohit/mcp/TestForge/examples/sample-project/.features-gen",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
@@ -99,11 +99,11 @@
                         },
                         {
                           "location": {
-                            "file": "C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts",
+                            "file": "C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts",
                             "column": 25,
                             "line": 71
                           },
-                          "message": "Error: page.waitForLoadState: Test timeout of 120000ms exceeded.\n\n\u001b[90m   at \u001b[39m..\\src\\pages\\JQueryDatePickerPage.ts:71\n\n\u001b[0m \u001b[90m 69 |\u001b[39m\n \u001b[90m 70 |\u001b[39m         \u001b[90m// Rule 10: Wait for state to stabilize after interaction\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m         \u001b[36mawait\u001b[39m \u001b[36mthis\u001b[39m\u001b[33m.\u001b[39mpage\u001b[33m.\u001b[39mwaitForLoadState(\u001b[32m'networkidle'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m     }\n \u001b[90m 73 |\u001b[39m\n \u001b[90m 74 |\u001b[39m     \u001b[36masync\u001b[39m verifyDateSelected(day\u001b[33m:\u001b[39m string\u001b[33m,\u001b[39m month\u001b[33m:\u001b[39m string\u001b[33m,\u001b[39m year\u001b[33m:\u001b[39m string) {\u001b[0m\n\u001b[2m    at JQueryDatePickerPage.selectDate (C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts:71:25)\u001b[22m\n\u001b[2m    at Object.<anonymous> (C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\src\\step-definitions\\datepicker.steps.ts:19:5)\u001b[22m\n\u001b[2m    at C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\.features-gen\\src\\features\\datepicker.feature.spec.js:9:5\u001b[22m"
+                          "message": "Error: page.waitForLoadState: Test timeout of 120000ms exceeded.\n\n\u001b[90m   at \u001b[39m..\\src\\pages\\JQueryDatePickerPage.ts:71\n\n\u001b[0m \u001b[90m 69 |\u001b[39m\n \u001b[90m 70 |\u001b[39m         \u001b[90m// Rule 10: Wait for state to stabilize after interaction\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m         \u001b[36mawait\u001b[39m \u001b[36mthis\u001b[39m\u001b[33m.\u001b[39mpage\u001b[33m.\u001b[39mwaitForLoadState(\u001b[32m'networkidle'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                         \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m     }\n \u001b[90m 73 |\u001b[39m\n \u001b[90m 74 |\u001b[39m     \u001b[36masync\u001b[39m verifyDateSelected(day\u001b[33m:\u001b[39m string\u001b[33m,\u001b[39m month\u001b[33m:\u001b[39m string\u001b[33m,\u001b[39m year\u001b[33m:\u001b[39m string) {\u001b[0m\n\u001b[2m    at JQueryDatePickerPage.selectDate (C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts:71:25)\u001b[22m\n\u001b[2m    at Object.<anonymous> (C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\src\\step-definitions\\datepicker.steps.ts:19:5)\u001b[22m\n\u001b[2m    at C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\.features-gen\\src\\features\\datepicker.feature.spec.js:9:5\u001b[22m"
                         }
                       ],
                       "stdout": [],
@@ -123,9 +123,9 @@
                           "duration": 115254,
                           "error": {
                             "message": "Error: page.waitForLoadState: Test timeout of 120000ms exceeded.",
-                            "stack": "Error: page.waitForLoadState: Test timeout of 120000ms exceeded.\n    at JQueryDatePickerPage.selectDate (C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts:71:25)\n    at Object.<anonymous> (C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\src\\step-definitions\\datepicker.steps.ts:19:5)\n    at C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\.features-gen\\src\\features\\datepicker.feature.spec.js:9:5",
+                            "stack": "Error: page.waitForLoadState: Test timeout of 120000ms exceeded.\n    at JQueryDatePickerPage.selectDate (C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts:71:25)\n    at Object.<anonymous> (C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\src\\step-definitions\\datepicker.steps.ts:19:5)\n    at C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\.features-gen\\src\\features\\datepicker.feature.spec.js:9:5",
                             "location": {
-                              "file": "C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts",
+                              "file": "C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\src\\pages\\JQueryDatePickerPage.ts",
                               "column": 25,
                               "line": 71
                             },
@@ -139,17 +139,17 @@
                         {
                           "name": "screenshot",
                           "contentType": "image/png",
-                          "path": "C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\test-results\\src-features-datepicker.fe-b4fdb-te-in-the-inline-datepicker-chromium\\test-failed-1.png"
+                          "path": "C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\test-results\\src-features-datepicker.fe-b4fdb-te-in-the-inline-datepicker-chromium\\test-failed-1.png"
                         },
                         {
                           "name": "video",
                           "contentType": "video/webm",
-                          "path": "C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\test-results\\src-features-datepicker.fe-b4fdb-te-in-the-inline-datepicker-chromium\\video.webm"
+                          "path": "C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\test-results\\src-features-datepicker.fe-b4fdb-te-in-the-inline-datepicker-chromium\\video.webm"
                         },
                         {
                           "name": "error-context",
                           "contentType": "text/markdown",
-                          "path": "C:\\Users\\Rohit\\mcp\\playwright-bdd-pom-mcp\\examples\\sample-project\\test-results\\src-features-datepicker.fe-b4fdb-te-in-the-inline-datepicker-chromium\\error-context.md"
+                          "path": "C:\\Users\\Rohit\\mcp\\TestForge\\examples\\sample-project\\test-results\\src-features-datepicker.fe-b4fdb-te-in-the-inline-datepicker-chromium\\error-context.md"
                         }
                       ]
                     },

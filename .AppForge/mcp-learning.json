@@ -1,0 +1,17 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "rule-1775982602415",
+      "pattern": "McpConfigService read() separation: all internal callers (runner, analyzer, generators) rely on defaults being merged. Separating read into readRaw() (pure disk) vs read() (with defaults) allows manage_config:read to show what the user actually stored, without breaking 15+ callers.",
+      "solution": "Keep read() returning deepMerge(DEFAULT_CONFIG, raw) for all internal callers. Add readRaw() returning Partial<McpConfig>|null for diagnostic/UI callers. Add preview(projectRoot, patch) for dry-run compute. Track lastWrittenAt: Date|null on the service instance — only write() and scaffold() set it, never read paths.",
+      "tags": [
+        "TASK-12",
+        "config-service",
+        "read-write-separation",
+        "mtime"
+      ],
+      "timestamp": "2026-04-12T08:30:02.415Z"
+    }
+  ]
+}

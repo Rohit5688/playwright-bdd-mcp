@@ -8,13 +8,18 @@ export interface McpConfig {
   /** Tags the generation prompt enforces. Override to match your team's taxonomy. */
   tags: string[];
 
-  /** Mapping from logical key names to actual .env variable names */
+  /** Mapping from logical key names to actual .env variable names.
+   * @example { baseUrl: 'BASE_URL', apiKey: 'API_KEY' }
+   */
   envKeys: {
     baseUrl: string;
     [key: string]: string;
   };
 
-  /** Directory layout for the test project */
+  /** Directory layout for the test project.
+   * All paths are relative to projectRoot.
+   * @example { features: 'features', pages: 'src/pages', stepDefinitions: 'step-definitions', testData: 'test-data' }
+   */
   dirs: {
     features: string;
     pages: string;
@@ -22,21 +27,51 @@ export interface McpConfig {
     testData: string;
   };
 
-  /** Browsers to include in playwright.config.ts */
+  /** Browsers to include in generated playwright.config.ts.
+   * Each entry maps to a Playwright project.
+   * @default ['chromium']
+   */
   browsers: Array<'chromium' | 'firefox' | 'webkit'>;
 
-  /** Default Playwright test timeout in milliseconds */
+  /**
+   * Relative path (from projectRoot) to the Playwright config file.
+   * When set, this path is passed as `--config <playwrightConfig>` to both
+   * `bddgen` and `playwright test`. Leave undefined to use Playwright's
+   * default discovery (looks for playwright.config.ts in projectRoot).
+   * @example 'playwright.config.ts'
+   * @example 'config/playwright.ci.config.ts'
+   */
+  playwrightConfig?: string;
+
+  /**
+   * Relative path (from projectRoot) to the TypeScript config file.
+   * When set, passed as `--tsconfig <path>` to every TypeScript compilation step
+   * (SandboxEngine, validate_and_write tsc check).
+   * Leave undefined to use compiler defaults.
+   * @example 'tsconfig.json'
+   * @example 'config/tsconfig.test.json'
+   */
+  tsconfigPath?: string;
+
+  /** Default Playwright test timeout in milliseconds.
+   * @default 30000
+   */
   timeout: number;
 
-  /** Number of Playwright retries on failure */
+  /** Number of Playwright retries on failure.
+   * @default 1
+   */
   retries: number;
 
-  /** Max attempts for the validate_and_write self-healing loop */
+  /** Max attempts for the validate_and_write self-healing loop.
+   * @default 3
+   */
   selfHealMaxRetries: number;
 
   /**
    * How many scenarios must share the same first Given step
    * before a Background: block is auto-generated.
+   * @default 3
    */
   backgroundBlockThreshold: number;
 
@@ -45,42 +80,49 @@ export interface McpConfig {
    *  - "none"       → no login step generated
    *  - "users-json" → credentials from test-data/users.{env}.json (recommended)
    *  - "env"        → credentials from .env variables (legacy)
+   * @default 'users-json'
    */
   authStrategy: 'none' | 'users-json' | 'env';
 
-  /** Currently active environment (matches users.{env}.json) */
+  /** Currently active environment (matches users.{env}.json).
+   * @default 'staging'
+   */
   currentEnvironment: string;
 
-  /** All supported environments */
+  /** All supported environments for this project.
+   * @default ['local', 'staging', 'prod']
+   */
   environments: string[];
 
   /**
    * Optional: package name or relative path to a base Page Object class.
    * Injected into generation context so all new POMs extend it.
+   * @example '@myorg/test-utils' | 'src/support/BasePage.ts'
    */
   basePageClass?: string;
 
   /**
    * Load state strategy to use after navigation calls.
    * Defaults to 'networkidle' which works for most SPAs.
+   * @default 'domcontentloaded'
    */
   waitStrategy: 'networkidle' | 'domcontentloaded' | 'load';
 
   /**
    * Maximum time (in ms) for a single test run shell execution (npx bddgen && npx playwright test).
    * If exceeded, the process is killed and a timeout error is returned.
-   * Defaults to 120000 (2 minutes). Increase for large test suites.
+   * @default 120000
    */
   testRunTimeout: number;
-  
-  /** 
+
+  /**
    * Path to store/read special architecture notes about custom wrappers or patterns.
-   * Defaults to 'docs/mcp-architecture-notes.md'.
+   * @default 'docs/mcp-architecture-notes.md'
    */
   architectureNotesPath: string;
 
   /**
-   * Absolute path to the actual automation code. 
+   * Absolute path to the actual automation code.
    * If provided, MCP tools can use this as a fallback projectRoot.
    */
   projectRoot?: string;
@@ -88,22 +130,27 @@ export interface McpConfig {
   /**
    * Additional folder names or relative paths where test data (JSON/TS/JS) might be stored.
    * Scanned recursively by the codebase analyzer.
+   * @default []
    */
   additionalDataPaths: string[];
 
   /**
-   * Accessibility standards to check against (e.g. ['wcag2aa', 'wcag21aa']).
+   * Accessibility standards to check against.
+   * @example ['wcag2aa', 'wcag21aa']
+   * @default ['wcag2aa']
    */
   a11yStandards: string[];
 
   /**
    * Path where accessibility violation reports should be saved.
+   * @default 'test-results/a11y-report.json'
    */
   a11yReportPath: string;
 
   /**
    * Optional custom execution command. If provided, overrides the default test runner command.
-   * Example: "npm run test:e2e --" or "yarn e2e --"
+   * @example 'npm run test:e2e --'
+   * @example 'yarn e2e --'
    */
   executionCommand?: string;
 }
@@ -119,6 +166,8 @@ export const DEFAULT_CONFIG: McpConfig = {
     testData: 'test-data',
   },
   browsers: ['chromium'],
+  // playwrightConfig and tsconfigPath intentionally left undefined:
+  // undefined = use Playwright/tsc's own discovery logic
   timeout: 30000,
   retries: 1,
   selfHealMaxRetries: 3,
@@ -126,26 +175,69 @@ export const DEFAULT_CONFIG: McpConfig = {
   authStrategy: 'users-json',
   currentEnvironment: 'staging',
   environments: ['local', 'staging', 'prod'],
-  waitStrategy: 'networkidle',
+  waitStrategy: 'domcontentloaded',
   testRunTimeout: 120_000,
   architectureNotesPath: 'docs/mcp-architecture-notes.md',
   additionalDataPaths: [],
   a11yStandards: ['wcag2aa'],
-  a11yReportPath: 'test-results/a11y-report.json'
+  a11yReportPath: 'test-results/a11y-report.json',
 };
 
 /**
- * McpConfigService — Phase 23
+ * McpConfigService — Phase 23 + TASK-04 + TASK-12
  *
  * Single source of truth for all team-level preferences.
  * Reads mcp-config.json from the project root and provides typed access.
- * Falls back to DEFAULT_CONFIG for any missing keys (safe merging).
+ *
+ * Read contract:
+ *  - `read()`    → merged with DEFAULT_CONFIG (all callers get safe defaults)
+ *  - `readRaw()` → exactly what is on disk, no defaults injected (for manage_config:read preview)
+ *
+ * Write contract:
+ *  - `write()` → merges patch into disk content, updates `lastWrittenAt` mtime
+ *  - `scaffold()` → creates the file if missing; also writes example
+ *  - `preview()` → returns merged result WITHOUT touching disk
  */
 export class McpConfigService {
   private readonly CONFIG_FILE = 'mcp-config.json';
   private readonly EXAMPLE_FILE = 'mcp-config.example.json';
 
-  /** Read mcp-config.json, merging with defaults for missing keys */
+  /**
+   * Tracks the timestamp of the last explicit `write()` call.
+   * Not persisted to disk — in-memory only, scoped to this service instance.
+   * Reset on each `write()`; never set by `read()` or `readRaw()`.
+   */
+  public lastWrittenAt: Date | null = null;
+
+  // ---------------------------------------------------------------------------
+  // TASK-12: Pure read — returns raw disk content, no defaults injected
+  // Use this in manage_config:read so the user sees what they actually stored.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns exactly what is in mcp-config.json on disk.
+   * Returns `null` if the file does not exist.
+   * Does NOT merge with DEFAULT_CONFIG — caller sees the raw partial config.
+   */
+  public readRaw(projectRoot: string): Partial<McpConfig> | null {
+    const configPath = path.join(projectRoot, this.CONFIG_FILE);
+    if (!fs.existsSync(configPath)) return null;
+    try {
+      return JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Partial<McpConfig>;
+    } catch {
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Primary read — always returns a fully populated McpConfig (with defaults).
+  // All internal callers (test runner, analyzer, generators) must use this.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Reads mcp-config.json and deep-merges with DEFAULT_CONFIG.
+   * Always returns a fully populated McpConfig — never throws on missing file.
+   */
   public read(projectRoot: string): McpConfig {
     const configPath = path.join(projectRoot, this.CONFIG_FILE);
     if (!fs.existsSync(configPath)) {
@@ -153,18 +245,40 @@ export class McpConfigService {
     }
     try {
       const raw = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Partial<McpConfig>;
-      return this.merge(DEFAULT_CONFIG, raw);
+      return this.deepMerge(DEFAULT_CONFIG, raw) as McpConfig;
     } catch {
       return { ...DEFAULT_CONFIG };
     }
   }
 
-  /** Write a (partial) config to mcp-config.json — merges with existing */
+  // ---------------------------------------------------------------------------
+  // TASK-12: preview — compute the merged result without touching disk
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Computes what the config would look like after applying `patch`,
+   * WITHOUT writing to disk. Use for manage_config:preview.
+   */
+  public preview(projectRoot: string, patch: Partial<McpConfig>): McpConfig {
+    const existing = this.read(projectRoot);
+    return this.deepMerge(existing, patch) as McpConfig;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Write — merges patch into existing disk content, stamps mtime
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Deep-merges `patch` into the existing mcp-config.json and writes to disk.
+   * `lastWrittenAt` is updated ONLY here — never in read paths.
+   */
   public write(projectRoot: string, patch: Partial<McpConfig>): McpConfig {
     const existing = this.read(projectRoot);
-    const merged = this.merge(existing, patch);
+    const merged = this.deepMerge(existing, patch) as McpConfig;
     const configPath = path.join(projectRoot, this.CONFIG_FILE);
     fs.writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf-8');
+    // TASK-12: mtime only updated on explicit write(), never on read()
+    this.lastWrittenAt = new Date();
     return merged;
   }
 
@@ -177,10 +291,11 @@ export class McpConfigService {
     const configPath = path.join(projectRoot, this.CONFIG_FILE);
     const examplePath = path.join(projectRoot, this.EXAMPLE_FILE);
 
-    const config: McpConfig = this.merge(DEFAULT_CONFIG, overrides);
+    const config = this.deepMerge(DEFAULT_CONFIG, overrides) as McpConfig;
 
     if (!fs.existsSync(configPath)) {
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+      this.lastWrittenAt = new Date();
     }
 
     // Always (re)write the example — it has no secrets
@@ -189,18 +304,28 @@ export class McpConfigService {
     return config;
   }
 
-  /** Deep merge: override values win, arrays are replaced (not appended) */
-  private merge(base: McpConfig, override: Partial<McpConfig>): McpConfig {
-    const result = { ...base };
-    for (const key of Object.keys(override) as (keyof McpConfig)[]) {
+  // ---------------------------------------------------------------------------
+  // Internal: recursive deep-merge
+  // Arrays are replaced (not appended) — this matches config update semantics.
+  // ---------------------------------------------------------------------------
+
+  private deepMerge(base: any, override: any): any {
+    if (base === null || typeof base !== 'object') return override;
+    if (override === null || typeof override !== 'object') return override;
+    if (Array.isArray(base) || Array.isArray(override)) return override;
+
+    const result: any = { ...base };
+    for (const key of Object.keys(override)) {
       const val = override[key];
       if (val === undefined) continue;
-      if (Array.isArray(val)) {
-        (result as any)[key] = val;
-      } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        (result as any)[key] = { ...(base[key] as object), ...(val as object) };
+
+      if (
+        typeof val === 'object' && val !== null && !Array.isArray(val) &&
+        typeof result[key] === 'object' && result[key] !== null && !Array.isArray(result[key])
+      ) {
+        result[key] = this.deepMerge(result[key], val);
       } else {
-        (result as any)[key] = val;
+        result[key] = val;
       }
     }
     return result;

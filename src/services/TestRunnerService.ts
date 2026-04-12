@@ -1,11 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { ITestRunner, TestRunnerResult } from '../interfaces/ITestRunner.js';
 import { sanitizeShellArg } from '../utils/SecurityUtils.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
 
@@ -18,8 +18,8 @@ const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
  */
 export class TestRunnerService implements ITestRunner {
   public async runTests(
-    projectRoot: string, 
-    specificTestArgs?: string, 
+    projectRoot: string,
+    specificTestArgs?: string,
     timeoutMs?: number,
     executionCommand?: string
   ): Promise<TestRunnerResult> {
@@ -27,9 +27,9 @@ export class TestRunnerService implements ITestRunner {
     try {
       // Phase 35: Sanitize user-supplied arguments before shell interpolation
       const safeArgs = specificTestArgs ? sanitizeShellArg(specificTestArgs) : '';
-      
+
       let command = 'npx bddgen && npx playwright test';
-      
+
       if (executionCommand) {
         command = executionCommand;
       } else {
@@ -45,15 +45,42 @@ export class TestRunnerService implements ITestRunner {
       const argsToAppend = (needsSeparator && !command.includes(' -- ')) ? `-- ${safeArgs}` : safeArgs;
 
       const fullCommand = `${command} ${argsToAppend}`.trim();
+      const commandSegments = fullCommand.split('&&').map(c => c.trim()).filter(Boolean);
 
-      const { stdout, stderr } = await execAsync(fullCommand, {
-        cwd: projectRoot,
-        timeout: runTimeout,
-      });
-      
+      let aggregatedStdout = '';
+      let aggregatedStderr = '';
+
+      for (const cmdStr of commandSegments) {
+        const parts = cmdStr.split(/\s+/).filter(p => p.length > 0);
+        let exe = parts.shift();
+        if (!exe) throw new Error(`Invalid execution segment: ${cmdStr}`);
+        
+        // Prevent path traversal in executable
+        if (exe.includes('..') || (exe.includes('/') && !exe.startsWith('/'))) {
+          throw new Error(`Invalid executable path: ${exe}`);
+        }
+
+        // On Windows, package managers often need .cmd extension for execFile
+        const isWin = process.platform === 'win32';
+        if (isWin && ['npm', 'npx', 'yarn', 'pnpm', 'bun'].includes(exe)) {
+          exe = `${exe}.cmd`;
+        }
+
+        const args = parts;
+
+        const { stdout, stderr } = await execFileAsync(exe, args, {
+          cwd: projectRoot,
+          timeout: runTimeout,
+          env: { ...process.env, FORCE_COLOR: '0' }
+        });
+
+        aggregatedStdout += stdout + '\n';
+        aggregatedStderr += stderr + '\n';
+      }
+
       return {
         passed: true,
-        output: `[SUCCESS] Tests passed!\n\nStandard Output:\n${stdout}\n\nStandard Error:\n${stderr}`
+        output: `[SUCCESS] Tests passed!\n\nStandard Output:\n${aggregatedStdout.trim()}\n\nStandard Error:\n${aggregatedStderr.trim()}`
       };
     } catch (error) {
       // Check if the error is a timeout kill

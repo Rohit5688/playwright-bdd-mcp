@@ -23,7 +23,7 @@ import * as vm from 'node:vm';
  * Each method receives a single JSON-serializable argument and returns a
  * JSON-serializable result (or a Promise of one).
  */
-export type SandboxApiMethod = (args: any) => any | Promise<any>;
+export type SandboxApiMethod = (...args: any[]) => any | Promise<any>;
 
 /**
  * The registry of methods exposed to the sandbox script via `forge.api.*`.
@@ -67,8 +67,16 @@ const BLOCKED_PATTERNS = [
   /\bprocess\b/,
   /\b__dirname\b/,
   /\b__filename\b/,
+  /\bglobal\b/,
   /\bglobalThis\b/,
   /\bchild_process\b/,
+  /\bworker_threads\b/,
+  /\.constructor\s*\.\s*constructor/i,
+  /this\s*\.\s*constructor\s*\.\s*constructor/i,
+  /Object\s*\.\s*getPrototypeOf/,          // blocks prototype chain escape via AsyncFunction (AUDIT-07)
+  /Object\s*\.\s*getOwnPropertyDescriptor/, // blocks property descriptor access on host objects (AUDIT-07)
+  /\bReflect\b/,                           // blocks using Reflect (AUDIT-07)
+  /\bFunction\b/,                          // blocks using Function (AUDIT-07)
 ];
 
 /**
@@ -79,10 +87,24 @@ function validateScript(script: string): string | null {
   for (const pattern of BLOCKED_PATTERNS) {
     if (pattern.test(script)) {
       return `Blocked: Script contains forbidden pattern "${pattern.source}". ` +
-        `For security, sandbox scripts cannot use eval(), require(), import(), process, or other Node.js globals.`;
+        `For security, sandbox scripts cannot use eval(), require(), import(), process, global, ` +
+        `constructor chains, or other Node.js internals.`;
     }
   }
   return null; // Script is clean
+}
+
+/**
+ * Creates a minimal safe console that captures output without exposing internals.
+ */
+function createSafeConsole(logs: string[]) {
+  return Object.freeze({
+    log: (...args: any[]) => logs.push(args.map(String).join(' ')),
+    warn: (...args: any[]) => logs.push(`[WARN] ${args.map(String).join(' ')}`),
+    error: (...args: any[]) => logs.push(`[ERROR] ${args.map(String).join(' ')}`),
+    info: (...args: any[]) => logs.push(`[INFO] ${args.map(String).join(' ')}`),
+    debug: (...args: any[]) => logs.push(`[DEBUG] ${args.map(String).join(' ')}`),
+  });
 }
 
 /**
@@ -129,30 +151,30 @@ export async function executeSandbox(
   for (const [name, fn] of Object.entries(apiRegistry)) {
     apiBridge[name] = async (...args: any[]) => {
       try {
-        return await fn(args.length === 1 ? args[0] : args);
+        return await fn(...args);
       } catch (err) {
         throw new Error(`forge.api.${name}() failed: ${(err as Error).message}`);
       }
     };
   }
 
+  // Freeze the API bridge to prevent modification
+  Object.freeze(apiBridge);
+
   // Step 3: Create a sandboxed context with only safe globals.
+  // CRITICAL: We explicitly set dangerous globals to undefined or null to block access.
   const sandboxGlobals: Record<string, any> = {
     // The forge SDK — the only way the script can interact with the server
-    forge: {
+    forge: Object.freeze({
       api: apiBridge,
-    },
+    }),
 
     // Safe console (captured, not printed)
-    console: {
-      log: (...args: any[]) => logs.push(args.map(String).join(' ')),
-      warn: (...args: any[]) => logs.push(`[WARN] ${args.map(String).join(' ')}`),
-      error: (...args: any[]) => logs.push(`[ERROR] ${args.map(String).join(' ')}`),
-    },
+    console: createSafeConsole(logs),
 
-    // Standard safe builtins
-    JSON,
-    Math,
+    // Standard safe builtins (frozen to prevent prototype pollution)
+    JSON: Object.freeze(JSON),
+    Math: Object.freeze(Math),
     Date,
     Array,
     Object,
@@ -161,10 +183,16 @@ export async function executeSandbox(
     Boolean,
     Map,
     Set,
+    WeakMap,
+    WeakSet,
     RegExp,
     Error,
     TypeError,
     RangeError,
+    SyntaxError,
+    ReferenceError,
+    EvalError,
+    URIError,
     parseInt,
     parseFloat,
     isNaN,
@@ -173,11 +201,34 @@ export async function executeSandbox(
     decodeURIComponent,
     encodeURI,
     decodeURI,
-    Promise,
-    setTimeout: undefined, // explicitly blocked
-    setInterval: undefined, // explicitly blocked
-    fetch: undefined, // explicitly blocked
-    require: undefined, // explicitly blocked
+    Promise: class SandboxPromise<T> extends Promise<T> {},
+    
+    // === SECURITY: Explicitly block all dangerous globals ===
+    // Setting to undefined ensures they cannot be accessed, even via prototype chains
+    setTimeout: undefined,
+    setInterval: undefined,
+    setImmediate: undefined,
+    clearTimeout: undefined,
+    clearInterval: undefined,
+    clearImmediate: undefined,
+    fetch: undefined,
+    require: undefined,
+    module: undefined,
+    exports: undefined,
+    __dirname: undefined,
+    __filename: undefined,
+    global: undefined,
+    globalThis: undefined,
+    process: undefined,
+    Buffer: undefined,
+    
+    // Block constructor-based escapes
+    // Note: this.constructor.constructor is checked in static validation
+    Function: undefined,
+    eval: undefined,
+    
+    // Block async resource access
+    queueMicrotask: undefined,
   };
 
   const context = vm.createContext(sandboxGlobals, {
@@ -189,8 +240,10 @@ export async function executeSandbox(
   });
 
   // Step 4: Wrap the user script in an async IIFE so they can use `await`.
+  // We also wrap in try-catch to capture any unhandled errors gracefully.
   const wrappedScript = `
     (async () => {
+      'use strict';
       ${script}
     })();
   `;

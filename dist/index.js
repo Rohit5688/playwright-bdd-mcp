@@ -34,6 +34,7 @@ import { TestForgeError } from "./utils/ErrorCodes.js";
 import { EnvironmentCheckService } from "./services/EnvironmentCheckService.js";
 import { LocatorAuditService } from "./services/LocatorAuditService.js";
 import { UtilAuditService } from "./services/UtilAuditService.js";
+import { StagingService } from "./services/StagingService.js";
 // SOLID: Dependency Injection Root
 const analyzer = new CodebaseAnalyzerService();
 const generator = new TestGenerationService();
@@ -57,6 +58,7 @@ const sessionService = new PlaywrightSessionService();
 const envCheckService = new EnvironmentCheckService();
 const locatorAuditService = new LocatorAuditService();
 const utilAuditService = new UtilAuditService();
+const stagingService = new StagingService();
 const server = new Server({
     name: "TestForge",
     version: "1.0.0",
@@ -282,13 +284,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "manage_config",
-                description: "WHEN TO USE: To read, write, or scaffold project configurations. WHAT IT DOES: Interacts with mcp-config.json. HOW IT WORKS: Pass exactly the action (read, write, or scaffold) and partial config to map.",
+                description: "WHEN TO USE: To read, write, preview, or scaffold project configurations. WHAT IT DOES: Interacts with mcp-config.json. HOW IT WORKS: Pass the action and optional partial config. ACTIONS: 'read' returns raw on-disk content; 'write' deep-merges patch and updates file; 'preview' shows what 'write' would produce WITHOUT touching disk; 'scaffold' creates the file if missing.",
                 inputSchema: {
                     type: "object",
                     properties: {
                         projectRoot: { type: "string" },
-                        action: { type: "string", enum: ["read", "write", "scaffold"] },
-                        config: { type: "object", description: "Partial McpConfig to merge in (for 'write'/'scaffold'). Missing keys use defaults." }
+                        action: { type: "string", enum: ["read", "write", "scaffold", "preview"] },
+                        config: { type: "object", description: "Partial McpConfig to merge in (for 'write'/'scaffold'/'preview'). Missing keys use defaults." }
                     },
                     required: ["projectRoot", "action"]
                 }
@@ -707,65 +709,86 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     }
                     return { content: [{ type: "text", text: sanitizeOutput(previewMsg) }] };
                 }
-                const writeResult = fileWriter.writeFiles(projectRoot, files, false);
-                // Phase 35b: Audit generated code for hardcoded secrets before running tests
-                const secretViolations = auditGeneratedCode(files);
-                if (secretViolations.length > 0) {
-                    const warningBlock = [
-                        `🔒 SECRET AUDIT: ${secretViolations.length} hardcoded credential(s) found in generated code!`,
-                        '',
-                        ...secretViolations,
-                        '',
-                        'The files were written but contain hardcoded secrets that should be replaced.',
-                        'Please regenerate these files using process.env variables or getUser() helpers instead.'
-                    ].join('\n');
-                    // Return the warning but DON'T block — let the LLM see the issue and fix it
-                    return {
-                        content: [{ type: "text", text: sanitizeOutput(warningBlock) }],
-                        isError: true
-                    };
-                }
-                const runConfig = mcpConfig.read(projectRoot);
-                // Scope the test run ONLY to the generated feature to save time and tokens
-                let targetArg = undefined;
-                const featureFile = files.find((f) => f.path.endsWith('.feature'));
-                if (featureFile && featureFile.content) {
-                    const match = featureFile.content.match(/Feature:\s*(.+)/);
-                    if (match && match[1]) {
-                        targetArg = `--grep "${match[1].trim()}"`;
-                    }
-                }
-                const runResult = await runner.runTests(projectRoot, targetArg, runConfig.testRunTimeout, runConfig.executionCommand);
-                const lastOutput = runResult.output;
-                if (runResult.passed) {
-                    retrySessionMap.delete(projectRoot);
-                    return {
-                        content: [{
-                                type: "text",
-                                text: sanitizeOutput(`✅ SUCCESS on attempt ${currentAttempt}/${MAX_RETRIES}!\n\nAll tests passed. Files written and validated:\n${writeResult.written.map((f) => `  - ${f}`).join('\n')}`)
-                            }]
-                    };
-                }
-                const analysis = selfHealer.analyzeFailure(lastOutput);
-                if (!analysis.canAutoHeal) {
-                    retrySessionMap.delete(projectRoot);
-                    return { content: [{ type: "text", text: sanitizeOutput(`⚠️ AUTO-HEAL BLOCKED after attempt ${currentAttempt}/${MAX_RETRIES}\n\n${analysis.healInstruction}`) }] };
-                }
-                let healingContext = analysis.healInstruction;
-                if (pageUrl) {
+                let stagingDir;
+                try {
+                    // Phase 4.3: Atomic Staging (TASK-44)
                     try {
-                        const dom = await domInspector.inspect(pageUrl);
-                        healingContext += `\n\n--- FRESH DOM SNAPSHOT (Attempt ${currentAttempt}) ---\n${dom}`;
+                        stagingDir = await stagingService.stageAndValidate(projectRoot, files);
                     }
-                    catch (e) {
-                        healingContext += `\n\n[DOM re-inspection failed: ${e.message}]`;
+                    catch (stagingError) {
+                        return {
+                            content: [{
+                                    type: "text",
+                                    text: stagingError.message || String(stagingError)
+                                }],
+                            isError: true
+                        };
+                    }
+                    const writeResult = fileWriter.writeFiles(projectRoot, files, false);
+                    // Phase 35b: Audit generated code for hardcoded secrets before running tests
+                    const secretViolations = auditGeneratedCode(files);
+                    if (secretViolations.length > 0) {
+                        const warningBlock = [
+                            `🔒 SECRET AUDIT: ${secretViolations.length} hardcoded credential(s) found in generated code!`,
+                            '',
+                            ...secretViolations,
+                            '',
+                            'The files were written but contain hardcoded secrets that should be replaced.',
+                            'Please regenerate these files using process.env variables or getUser() helpers instead.'
+                        ].join('\n');
+                        // Return the warning but DON'T block — let the LLM see the issue and fix it
+                        return {
+                            content: [{ type: "text", text: sanitizeOutput(warningBlock) }],
+                            isError: true
+                        };
+                    }
+                    const runConfig = mcpConfig.read(projectRoot);
+                    // Scope the test run ONLY to the generated feature to save time and tokens
+                    let targetArg = undefined;
+                    const featureFile = files.find((f) => f.path.endsWith('.feature'));
+                    if (featureFile && featureFile.content) {
+                        const match = featureFile.content.match(/Feature:\s*(.+)/);
+                        if (match && match[1]) {
+                            targetArg = `--grep "${match[1].trim()}"`;
+                        }
+                    }
+                    const runResult = await runner.runTests(projectRoot, targetArg, runConfig.testRunTimeout, runConfig.executionCommand);
+                    const lastOutput = runResult.output;
+                    if (runResult.passed) {
+                        retrySessionMap.delete(projectRoot);
+                        return {
+                            content: [{
+                                    type: "text",
+                                    text: sanitizeOutput(`✅ SUCCESS on attempt ${currentAttempt}/${MAX_RETRIES}!\n\nAll tests passed. Files written and validated:\n${writeResult.written.map((f) => `  - ${f}`).join('\n')}`)
+                                }]
+                        };
+                    }
+                    const analysis = selfHealer.analyzeFailure(lastOutput);
+                    if (!analysis.canAutoHeal) {
+                        retrySessionMap.delete(projectRoot);
+                        return { content: [{ type: "text", text: sanitizeOutput(`⚠️ AUTO-HEAL BLOCKED after attempt ${currentAttempt}/${MAX_RETRIES}\n\n${analysis.healInstruction}`) }] };
+                    }
+                    let healingContext = analysis.healInstruction;
+                    if (pageUrl) {
+                        try {
+                            const dom = await domInspector.inspect(pageUrl);
+                            healingContext += `\n\n--- FRESH DOM SNAPSHOT (Attempt ${currentAttempt}) ---\n${dom}`;
+                        }
+                        catch (e) {
+                            healingContext += `\n\n[DOM re-inspection failed: ${e.message}]`;
+                        }
+                    }
+                    if (currentAttempt < MAX_RETRIES) {
+                        return { content: [{ type: "text", text: sanitizeOutput(`🔄 ATTEMPT ${currentAttempt}/${MAX_RETRIES} FAILED — SELF-HEALING ACTIVATED\n\n${healingContext}`) }] };
+                    }
+                    retrySessionMap.delete(projectRoot);
+                    return { content: [{ type: "text", text: sanitizeOutput(`❌ ALL ${MAX_RETRIES} ATTEMPTS EXHAUSTED\n\n${selfHealer.analyzeFailure(lastOutput).healInstruction}`) }] };
+                }
+                finally {
+                    if (stagingDir) {
+                        stagingService.cleanup(stagingDir);
                     }
                 }
-                if (currentAttempt < MAX_RETRIES) {
-                    return { content: [{ type: "text", text: sanitizeOutput(`🔄 ATTEMPT ${currentAttempt}/${MAX_RETRIES} FAILED — SELF-HEALING ACTIVATED\n\n${healingContext}`) }] };
-                }
-                retrySessionMap.delete(projectRoot);
-                return { content: [{ type: "text", text: sanitizeOutput(`❌ ALL ${MAX_RETRIES} ATTEMPTS EXHAUSTED\n\n${selfHealer.analyzeFailure(lastOutput).healInstruction}`) }] };
             }
             case "setup_project": {
                 const { projectRoot } = args;
@@ -829,9 +852,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case "manage_config": {
                 const { projectRoot, action, config: configPatch } = args;
+                // TASK-12: 'read' returns raw on-disk content — no defaults injected.
+                // Callers that need defaults should use the service's read() internally;
+                // this action is for inspecting what the user actually stored.
                 if (action === "read") {
-                    const current = mcpConfig.read(projectRoot);
-                    return { content: [{ type: "text", text: JSON.stringify(current, null, 2) }] };
+                    const raw = mcpConfig.readRaw(projectRoot);
+                    if (raw === null) {
+                        return {
+                            content: [{
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        status: "no_config",
+                                        message: `mcp-config.json not found at ${projectRoot}. Run 'scaffold' to create it.`,
+                                        defaults: DEFAULT_CONFIG
+                                    }, null, 2)
+                                }]
+                        };
+                    }
+                    return {
+                        content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    status: "ok",
+                                    source: "disk",
+                                    lastWrittenAt: mcpConfig.lastWrittenAt?.toISOString() ?? "unknown (pre-session write)",
+                                    config: raw
+                                }, null, 2)
+                            }]
+                    };
+                }
+                // TASK-12: 'preview' — computes merged result WITHOUT touching disk.
+                if (action === "preview") {
+                    if (!configPatch)
+                        throw new Error("'preview' action requires a 'config' object.");
+                    const previewed = mcpConfig.preview(projectRoot, configPatch);
+                    return {
+                        content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    status: "preview",
+                                    message: "This is a dry-run. No files were written.",
+                                    wouldProduce: previewed
+                                }, null, 2)
+                            }]
+                    };
                 }
                 if (action === "scaffold") {
                     const written = mcpConfig.scaffold(projectRoot, configPatch ?? {});
@@ -848,9 +912,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     if (!configPatch)
                         throw new Error("'write' action requires a 'config' object.");
                     const updated = mcpConfig.write(projectRoot, configPatch);
-                    return { content: [{ type: "text", text: `✅ mcp-config.json updated.\n\n${JSON.stringify(updated, null, 2)}` }] };
+                    return {
+                        content: [{
+                                type: "text",
+                                text: JSON.stringify({
+                                    status: "ok",
+                                    lastWrittenAt: mcpConfig.lastWrittenAt?.toISOString(),
+                                    config: updated
+                                }, null, 2)
+                            }]
+                    };
                 }
-                throw new Error(`Unknown manage_config action: ${action}. Valid values: read, write, scaffold`);
+                throw new Error(`Unknown manage_config action: ${action}. Valid values: read, write, preview, scaffold`);
             }
             case "manage_users": {
                 const { projectRoot, action, roles } = args;
@@ -977,17 +1050,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case "request_user_clarification": {
                 const { question, options, context } = args;
-                let responseText = `🚨 SYSTEM HALT: CLARIFICATION REQUIRED 🚨\n\n`;
-                responseText += `Reason for pausing: ${context}\n\n`;
-                responseText += `SYSTEM INSTRUCTION TO AI CLIENT: You MUST STOP generating files or executing further commands. Present the following question directly to the human user, and wait for their explicit answer.\n\n`;
-                responseText += `Q: **${question}**\n`;
-                if (options && options.length > 0) {
-                    responseText += `Options:\n`;
-                    options.forEach((opt, idx) => {
-                        responseText += `  ${idx + 1}. ${opt}\n`;
-                    });
-                }
-                return { content: [{ type: "text", text: sanitizeOutput(responseText) }] };
+                // Route through Questioner.clarify() — throws ClarificationRequired which is
+                // caught by the global handler below and serialised as structured JSON.
+                // This is the canonical AppForge pattern: throw → catch → structured response.
+                Questioner.clarify(question, context, options);
             }
             case "train_on_example": {
                 const { projectRoot, issuePattern, solution, tags } = args;
@@ -1005,38 +1071,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 });
                 return { content: [{ type: "text", text: `✅ Pipeline successfully generated at:\n  - ${targetPath}\n\nEnsure you push this file to your repository and setup branch protections if applicable.` }] };
             }
-            case "export_jira_bug": {
-                const { testName, rawError } = args;
-                const report = `h2. Bug: Automated Test Failure - ${testName}
-
-h3. Error Log
-{code:java}
-${rawError}
-{code}
-
-h3. Attachments Available Local to Runner
-Please attach the following artifacts from the CI machine or your local \`test-results\` / \`playwright-report\` folder:
-* *Trace File*: \`playwright-report/trace.zip\` (Upload to https://trace.playwright.dev to view)
-* *Video Recording*: \`test-results/**/video.webm\`
-
-h3. Next Steps
-# Review the attached trace to see the DOM snapshot at the time of failure.
-# If this is a scripting error, use the agent's \`self_heal_test\` tool to fix the page object.`;
-                return { content: [{ type: "text", text: sanitizeOutput(report) }] };
-            }
+            // NOTE: duplicate export_jira_bug case removed — handled at line 1035 via analyticsService.
             case "export_team_knowledge": {
                 const { projectRoot } = args;
-                const brain = learningService.getKnowledge(projectRoot);
+                // Delegate to LearningService.exportToMarkdown() — single source of truth.
+                const md = learningService.exportToMarkdown(projectRoot);
                 const docsDir = path.join(projectRoot, 'docs');
                 if (!fs.existsSync(docsDir))
                     fs.mkdirSync(docsDir, { recursive: true });
                 const filePath = path.join(docsDir, 'team-knowledge.md');
-                let md = `# Autonomous AI QA Brain\n\nThis document was automatically generated from \`.TestForge/mcp-learning.json\`. These are the custom rules the AI has learned from human corrections.\n\n`;
-                brain.rules.forEach((r, idx) => {
-                    md += `## Rule ${idx + 1}: ${r.pattern}\n**Action**: ${r.solution}\n**Tags**: ${r.tags.join(', ')}\n**Learned On**: ${r.timestamp}\n\n`;
-                });
                 fs.writeFileSync(filePath, md, 'utf8');
-                return { content: [{ type: "text", text: `✅ Team Knowledge successfully exported to ${filePath}.\nCommit this to your repository to share with the team!` }] };
+                return {
+                    content: [{
+                            type: "text",
+                            text: `✅ Team knowledge exported to ${filePath}.\nCommit this file to share learned rules with the team.`
+                        }]
+                };
             }
             case "execute_sandbox_code": {
                 const { script, timeoutMs } = args;
@@ -1052,10 +1102,15 @@ h3. Next Steps
                         const config = mcpConfig.read(projectRoot);
                         return await runner.runTests(projectRoot, undefined, config.testRunTimeout);
                     },
-                    readFile: async (filePath) => {
-                        if (!fs.existsSync(filePath))
+                    readFile: async (filePath, projectRoot) => {
+                        const resolvedRoot = path.resolve(projectRoot || process.cwd());
+                        const resolvedFile = path.resolve(resolvedRoot, filePath);
+                        if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
+                            throw new Error(`[SECURITY] Path traversal blocked. "${filePath}" resolves outside projectRoot.`);
+                        }
+                        if (!fs.existsSync(resolvedFile))
                             return null;
-                        return fs.readFileSync(filePath, 'utf8');
+                        return fs.readFileSync(resolvedFile, 'utf8');
                     },
                     getConfig: async (projectRoot) => {
                         return mcpConfig.read(projectRoot);
@@ -1063,6 +1118,187 @@ h3. Next Steps
                     summarizeSuite: async (projectRoot) => {
                         return suiteSummary.summarize(projectRoot);
                     },
+                    listFiles: async (dir, options, projectRoot) => {
+                        const MAX_LIST_ITEMS = 5000;
+                        const resolvedRoot = projectRoot ? path.resolve(projectRoot) : process.cwd();
+                        const absDir = path.resolve(resolvedRoot, dir);
+                        if (!absDir.startsWith(resolvedRoot + path.sep) && absDir !== resolvedRoot) {
+                            throw new Error(`[SECURITY] Path traversal blocked. "${dir}" resolves outside projectRoot.`);
+                        }
+                        if (!fs.existsSync(absDir)) {
+                            throw new Error(`Directory not found: ${absDir}`);
+                        }
+                        const walk = (base, rel = '') => {
+                            const results = [];
+                            const entries = fs.readdirSync(base, { withFileTypes: true });
+                            for (const entry of entries) {
+                                const name = entry.name;
+                                const full = path.join(base, name);
+                                const relPath = rel ? path.join(rel, name) : name;
+                                const stat = fs.lstatSync(full);
+                                if (stat.isSymbolicLink())
+                                    continue;
+                                if (stat.isFile())
+                                    results.push(relPath);
+                                else if (stat.isDirectory() && options?.recursive) {
+                                    results.push(...walk(full, relPath));
+                                }
+                                if (results.length >= MAX_LIST_ITEMS)
+                                    break;
+                            }
+                            return results;
+                        };
+                        let items = options?.recursive ? walk(absDir, '') : fs.readdirSync(absDir).filter(n => {
+                            try {
+                                const s = fs.lstatSync(path.join(absDir, n));
+                                return !s.isSymbolicLink();
+                            }
+                            catch {
+                                return false;
+                            }
+                        });
+                        if (options?.glob) {
+                            // Minimal glob matcher using regex to avoid adding external dependencies dynamically
+                            const globToRegex = (globPattern) => {
+                                const escaped = globPattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+                                const replaced = escaped.replace(/\*/g, '.*').replace(/\?/g, '.');
+                                return new RegExp(`^${replaced}$`);
+                            };
+                            const regex = globToRegex(options.glob);
+                            items = items.filter(item => regex.test(path.basename(item)));
+                        }
+                        return items.slice(0, MAX_LIST_ITEMS);
+                    },
+                    searchFiles: async (pattern, dir, options) => {
+                        const MAX_SEARCH_FILES = 1000;
+                        const MAX_SEARCH_RESULTS = 500;
+                        const MAX_PARSE_FILE_BYTES = 1024 * 1024; // 1MB
+                        const pRoot = options?.projectRoot ? path.resolve(options.projectRoot) : process.cwd();
+                        if (/(?:\([^)]*\+[^)]*\)\+)/.test(pattern) || pattern.length > 200) {
+                            throw new Error('Regex rejected: potential ReDoS');
+                        }
+                        let regex;
+                        try {
+                            regex = new RegExp(pattern, 'g');
+                        }
+                        catch {
+                            throw new Error('Invalid regex pattern');
+                        }
+                        // A bit hacky but we call the localized listFiles directly
+                        const resolvedRoot = pRoot;
+                        const absDir = path.resolve(resolvedRoot, dir);
+                        if (!absDir.startsWith(resolvedRoot + path.sep) && absDir !== resolvedRoot) {
+                            throw new Error(`[SECURITY] Path traversal blocked.`);
+                        }
+                        const walk = (base, rel = '') => {
+                            const results = [];
+                            const entries = fs.readdirSync(base, { withFileTypes: true });
+                            for (const entry of entries) {
+                                const name = entry.name;
+                                const full = path.join(base, name);
+                                const relPath = rel ? path.join(rel, name) : name;
+                                if (fs.lstatSync(full).isSymbolicLink())
+                                    continue;
+                                if (fs.statSync(full).isFile())
+                                    results.push(relPath);
+                                else if (fs.statSync(full).isDirectory())
+                                    results.push(...walk(full, relPath));
+                                if (results.length >= MAX_SEARCH_FILES)
+                                    break;
+                            }
+                            return results;
+                        };
+                        let files = walk(absDir, '');
+                        if (options?.filePattern) {
+                            const escaped = options.filePattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+                            const rx = new RegExp(`^${escaped}$`);
+                            files = files.filter(f => rx.test(path.basename(f)));
+                        }
+                        const hits = [];
+                        let scanned = 0;
+                        for (const fileRel of files.slice(0, MAX_SEARCH_FILES)) {
+                            const fullPath = path.join(absDir, fileRel);
+                            try {
+                                const stats = fs.statSync(fullPath);
+                                if (stats.size > MAX_PARSE_FILE_BYTES)
+                                    continue;
+                                const content = fs.readFileSync(fullPath, 'utf8');
+                                const lines = content.split('\n');
+                                for (let i = 0; i < lines.length; i++) {
+                                    const lineContent = lines[i];
+                                    if (lineContent !== undefined && regex.test(lineContent)) {
+                                        hits.push({ file: path.join(dir, fileRel), line: i + 1, text: lineContent });
+                                        regex.lastIndex = 0;
+                                        if (hits.length >= MAX_SEARCH_RESULTS)
+                                            break;
+                                    }
+                                }
+                                scanned++;
+                                if (hits.length >= MAX_SEARCH_RESULTS)
+                                    break;
+                            }
+                            catch { }
+                            if (scanned >= MAX_SEARCH_FILES)
+                                break;
+                        }
+                        return hits.slice(0, MAX_SEARCH_RESULTS);
+                    },
+                    parseAST: async (filePath, options) => {
+                        const ts = await import('typescript').catch(() => null);
+                        if (!ts)
+                            throw new Error('typescript package not available');
+                        const MAX_PARSE_FILE_BYTES = 1024 * 1024; // 1MB
+                        const projectRoot = options?.projectRoot ? path.resolve(options.projectRoot) : process.cwd();
+                        const absPath = path.resolve(projectRoot, filePath);
+                        if (!absPath.startsWith(projectRoot + path.sep) && absPath !== projectRoot) {
+                            throw new Error(`[SECURITY] Path traversal blocked. "${filePath}" resolves outside projectRoot.`);
+                        }
+                        if (!fs.existsSync(absPath)) {
+                            throw new Error(`File not found: ${absPath}`);
+                        }
+                        const stats = fs.statSync(absPath);
+                        if (stats.size > MAX_PARSE_FILE_BYTES) {
+                            throw new Error(`File too large: ${absPath}`);
+                        }
+                        const content = fs.readFileSync(absPath, 'utf8');
+                        const sourceFile = ts.createSourceFile(absPath, content, ts.ScriptTarget.Latest, true);
+                        if (options?.extractSignatures) {
+                            const signatures = [];
+                            const visit = (node) => {
+                                if (ts.isFunctionDeclaration(node) && node.name) {
+                                    signatures.push({
+                                        name: node.name.text,
+                                        type: 'function',
+                                        signature: (node.getText ? node.getText() : '').split('{')[0]?.trim() || ''
+                                    });
+                                }
+                                else if (ts.isClassDeclaration(node) && node.name) {
+                                    signatures.push({
+                                        name: node.name.text,
+                                        type: 'class',
+                                        signature: `class ${node.name.text}`
+                                    });
+                                }
+                                ts.forEachChild(node, visit);
+                            };
+                            visit(sourceFile);
+                            return signatures;
+                        }
+                        return sourceFile;
+                    },
+                    getEnv: async (key) => {
+                        const SAFE_ENV_VARS = [
+                            'NODE_ENV',
+                            'CI',
+                            'GITHUB_ACTIONS',
+                            'BASE_URL',
+                            'PLATFORM'
+                        ];
+                        if (!SAFE_ENV_VARS.includes(key)) {
+                            throw new Error(`Environment variable "${key}" is not on the allowlist.`);
+                        }
+                        return process.env[key] ?? null;
+                    }
                 };
                 const sandboxResult = await executeSandbox(script, apiRegistry, { timeoutMs });
                 if (sandboxResult.success) {
@@ -1173,7 +1409,7 @@ h3. Next Steps
 // CLI setup for Stdio vs SSE
 const program = new Command();
 program
-    .name("mcp-playwright-bdd")
+    .name("TestForge")
     .description("MCP server for Playwright-BDD POM generation");
 program
     .command("setup")
@@ -1225,7 +1461,7 @@ async function startServer(options) {
         const port = parseInt(options.port, 10);
         const host = options.host || "127.0.0.1";
         app.listen(port, host, () => {
-            console.log(`[playwright-bdd-pom-mcp] Remote SSE listening on http://${host}:${port}/sse`);
+            console.log(`[TestForge] Remote SSE listening on http://${host}:${port}/sse`);
         });
     }
     else {

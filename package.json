@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "npm run build && node --test dist/tests/",
+    "pretest": "tsc",
+    "test": "node --test dist/tests/",
+    "test:watch": "node --test --watch src/tests/",
     "build:macos": "pkg . --targets node18-macos-arm64,node18-macos-x64 --out-path binaries",
     "build:win": "pkg . --targets node18-win-x64 --out-path binaries"
   },
@@ -44,6 +46,7 @@
   },
   "homepage": "https://github.com/Rohit5688/TestForge#readme",
   "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.92",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "commander": "^14.0.3",
     "express": "^5.2.1",
