@@ -145,11 +145,11 @@ For each doc file updated:
 ---
 
 ## Done Criteria
-- [ ] TestForge `MCP_CONFIG_REFERENCE.md` created or updated — all TASK-04 fields documented
-- [ ] TestForge tasks README lists all 27 tasks in correct tier order
+- [x] TestForge `MCP_CONFIG_REFERENCE.md` created or updated — all TASK-04 fields documented
+- [x] TestForge tasks README lists all 27 tasks in correct tier order
 - [ ] AppForge `MCP_CONFIG_REFERENCE.md` audited — all TASK-18 fields added
 - [ ] AppForge `ARCHITECTURE.md` reflects two-phase setup and extension pipeline
-- [ ] Root `README.md` quick-start guides work for the current codebase (both repos)
-- [ ] `project-extensions-design.md` updated to mark Phase 1 (schema) as DONE after TASK-04/25 complete
-- [ ] No doc references features that were changed but not updated
+- [x] Root `README.md` quick-start guides work for the current codebase (both repos)
+- [x] `project-extensions-design.md` updated to mark Phase 1 (schema) as DONE after TASK-04/25 complete
+- [x] No doc references features that were changed but not updated
 - [ ] Change `Status` above to `DONE`

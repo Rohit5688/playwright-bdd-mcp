@@ -201,7 +201,7 @@ Review these specific changes to ensure the logic matches your team's expectatio
 
 ### Phase 38: Selenium → Playwright Migration Engine ✅ COMPLETED
 **Priority**: ★★★★★ (High Impact / ROI)
-**Objective**: Build `migrate_from_selenium` tool to automate legacy suite modernization.
+**Objective**: Build `migrate_test` tool to automate legacy suite modernization.
 
 #### 🧠 Complexity & Challenges
 *   **AST Parsing (High)**: Navigating legacy code structure requires robust syntax tree analysis (using `ts-morph` or `tree-sitter`) to identify Page Objects and Step Definitions.
@@ -295,7 +295,7 @@ Legacy implementations vary dramatically in design architecture. The migration e
   - **`request_user_clarification` Tool**: A dedicated MCP tool that presents multiple options or questions to the human user.
   - **Onboarding Wizard**: A step-by-step setup flow that pauses after `analyze_codebase` to ask about `authStrategy`, `waitStrategy`, and `tags` before updating any files.
   - **Environment Conflict Resolution**: Explicitly asking "I found an existing .env.dev and .env.local. Which one should I map to the 'local' environment in mcp-config?".
-  - **Ambiguity Gates**: Strategic pauses in `migrate_from_selenium` when multiple valid architectural choices (e.g. two conflicting base pages) are found.
+  - **Ambiguity Gates**: Strategic pauses in `migrate_test` when multiple valid architectural choices (e.g. two conflicting base pages) are found.
   - **Pre-Scaffold Approval**: Presenting the "proposed configuration" to the user for final approval before `ProjectSetupService` writes it to disk.
 
 ### Phase 46: Autonomous Learning & Persistent Knowledge Base ✅ COMPLETED

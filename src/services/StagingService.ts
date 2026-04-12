@@ -1,3 +1,4 @@
+import { McpErrors, McpError, McpErrorCode } from '../types/ErrorSystem.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -93,7 +94,7 @@ export class StagingService {
             .split('\n')
             .filter((line: string) => line.includes('error TS') || (line.trim() !== '' && !line.includes('npm')))
             .slice(0, 15);
-          throw new Error('TypeScript compilation failed in staging:\n' + errors.join('\n'));
+          throw new McpError('TypeScript compilation failed in staging:\n' + errors.join('\n'), McpErrorCode.TS_COMPILE_FAILED);
         }
       }
 

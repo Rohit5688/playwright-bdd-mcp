@@ -21,7 +21,13 @@ export interface HealingAnalysis {
     rawError: string;
     healInstruction: string;
 }
+import { DnaTrackerService } from './DnaTrackerService.js';
+import { LearningService } from './LearningService.js';
 export declare class SelfHealingService {
+    private attemptCount;
+    private readonly dnaTracker;
+    private readonly learner;
+    constructor(dnaTracker?: DnaTrackerService, learner?: LearningService);
     /** Patterns that strongly indicate a scripting / locator problem (not an app bug). */
     private readonly SCRIPTING_PATTERNS;
     /**
@@ -37,7 +43,13 @@ export declare class SelfHealingService {
     private readonly SYNC_PATTERNS;
     /** Patterns that indicate the app returned unexpected data (not a locator guess). */
     private readonly APP_FAILURE_PATTERNS;
-    analyzeFailure(testOutput: string, memoryPrompt?: string): HealingAnalysis;
+    analyzeFailure(testOutput: string, memoryPrompt?: string, contextId?: string, projectRoot?: string): HealingAnalysis;
+    resetAttempts(contextId?: string): void;
+    /**
+     * TASK-41: Called on successful heal. Auto-learns the fix into mcp-learning.json
+     * and increments DNA heal counter for the repaired selector.
+     */
+    notifyHealSuccess(projectRoot: string, failedSelector: string, fixedSelector: string, contextId?: string): void;
     private classifyFailure;
     private extractFailedLocators;
     private extractFailedFiles;

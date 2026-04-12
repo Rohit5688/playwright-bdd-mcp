@@ -15,7 +15,7 @@ Safely manages local `.env` values without leaking secrets to the LLM context.
 *   **Read**: Securely lists existing keys (values redacted).
 
 **Example Prompt to AI:**
-> *"Scaffold a .env file for my project. I need keys for `BASE_URL`, `API_TOKEN`, and `DB_HOST`."*
+> *"Scaffold a .env file for my project. I need keys for `baseUrl` (mapped via `config.envKeys.baseUrl`), `API_TOKEN`, and `DB_HOST`."*
 
 ## `manage_config`
 Generates an `mcp-config.json` inside your root directory. This configures heuristics like the default Base Page wrapper, global test timeouts, or extra directories for payload scanning.

@@ -7,6 +7,10 @@
 
 ## Concern 1 — The dependency injection problem is already happening
 
+> **Status: PARTIALLY RESOLVED**
+> - **AppForge**: DONE. `ServiceContainer` implemented. All services moved to `registrations.ts`. `AppForgeServer` now uses `container.resolve<T>()`.
+> - **TestForge**: OPEN. `index.ts` still uses flat declarations. Refactoring planned for late Phase 2.
+
 ### What the code actually shows
 
 TestForge's `index.ts` uses flat module-level instantiation:
@@ -144,6 +148,8 @@ registerGenerateCucumberPom(
 
 ## Concern 2 — MobileSmartTreeService is treating the symptom
 
+> **Status: RESOLVED (TestForge)** — `DomInspectorService` already uses `page.accessibility.snapshot()` as primary source with a semantic DOM fallback (18A FIX). Concern 2 was phased to TASK-62 — it was implemented proactively. No further action needed.
+
 ### What the code actually shows
 
 `MobileSmartTreeService.buildSparseMap()` takes raw Appium XML and extracts only interactive elements, reducing 50-200KB XML to ~5KB. It does this by parsing the XML string and filtering for `clickable="true"` and similar attributes.
@@ -220,6 +226,8 @@ This means TASK-62 (`SmartDomExtractor`) should target `page.accessibility.snaps
 
 ## Concern 3 — The `AgentRoutingService` (GS-23) should stay deferred, but here's why precisely
 
+> **Status: DEFERRED (by design)** — Not implemented in either codebase, as recommended. Revisit only after `TokenBudgetService` has 3+ months of real data.
+
 ### What the code actually shows
 
 The GS-23 task proposes routing "simple tasks to Haiku, complex to Opus." It does not exist in code — it is a bullet in the Gold Standard summary. Nothing in either codebase routes requests to different models.
@@ -251,6 +259,10 @@ The MCP protocol does not give the server control over which model the client us
 ---
 
 ## Concern 4 — The accumulation of `as any` casts and informal service coupling
+
+> **Status: PARTIALLY RESOLVED**
+> - **AppForge**: DONE. Constructor injection used for `SelfHealingService` and `ExecutionService`. Late-binding calls removed from `index.ts`. Singleton/Instance rules documented. `as any` cast removed via `ISessionVerifier`.
+> - **TestForge**: OPEN. `SelfHealingService` still uses internal `new` instantiations for `DnaTrackerService` and `LearningService`. Interface extraction for `PlaywrightSessionService` pending.
 
 ### What the code actually shows
 
@@ -368,15 +380,15 @@ This removes the `as any`, makes the actual dependency surface explicit, and mak
 
 These are not separate tasks to schedule — they are the _how_ of existing tasks. Slot them in as follows:
 
-| Concern                                        | Where it gets fixed                         | Task it rides on                                                                    |
-| ---------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| ServiceContainer (Concern 1)                   | `src/container/` new directory              | Phase 2, same session as TASK-28 (SDK migration rewrites index.ts anyway)           |
-| Constructor injection (Concern 4, Fix 1)       | All services using `set*` pattern           | Phase 2, alongside error system (TASK-50)                                           |
-| Singleton vs instance rule (Concern 4, Fix 2)  | Documented in container registrations       | Phase 2, when writing registrations.ts                                              |
-| Interface extraction (Concern 4, Fix 3)        | `src/interfaces/` directory                 | Phase 2, one interface per cross-service boundary                                   |
-| SmartTree root cause (Concern 2, Approach A)   | `DomInspectorService` + `SmartDomExtractor` | Phase 4, TASK-62 — change input to `page.accessibility.snapshot()`                  |
-| Hash-gated delta cache (Concern 2, Approach B) | `DomInspectorService`                       | Phase 4, TASK-62 — persist hash in `PlaywrightSessionService`                       |
-| AgentRouting (Concern 3)                       | Not implemented                             | Stays deferred. Revisit only after `TokenBudgetService` has 3+ months of real data. |
+| Concern                                        | Status (AppForge) | Status (TestForge) | Where it gets fixed (Latest) |
+| ---------------------------------------------- | ----------------- | ------------------ | ---------------------------- |
+| ServiceContainer (Concern 1)                   | ✅ DONE            | 🔴 OPEN            | `src/container/` (AF)        |
+| Constructor injection (Concern 4, Fix 1)       | ✅ DONE            | 🔴 OPEN            | `SelfHealingService` (AF)    |
+| Singleton vs instance rule (Concern 4, Fix 2)  | ✅ DONE            | 🔴 OPEN            | `registrations.ts` (AF)      |
+| Interface extraction (Concern 4, Fix 3)        | ✅ DONE            | 🔴 OPEN            | `ISessionVerifier.ts` (AF)   |
+| SmartTree root cause (Concern 2, Approach A)   | ✅ DONE            | ✅ DONE            | `SmartDomExtractor`          |
+| Hash-gated delta cache (Concern 2, Approach B) | ⽙️ DEFERRED        | ⽙️ DEFERRED        | Phase 4                      |
+| AgentRouting (Concern 3)                       | ⏸️ DEFERRED        | ⏸️ DEFERRED        | Deferred                     |
 
 ---
 

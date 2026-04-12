@@ -1,3 +1,5 @@
+import type { StagingService } from './StagingService.js';
+import type { FileStateService } from './FileStateService.js';
 export interface GeneratedFile {
     path: string;
     content: string;
@@ -37,5 +39,15 @@ export declare class FileWriterService {
         written: string[];
         warnings: string[];
     };
+    /**
+     * Validates generated files using ASTScrutinizer and tsc --noEmit (via StagingService),
+     * then writes if valid. Returns a JSON string with structured feedback.
+     */
+    validateAndWrite(projectRoot: string, files: GeneratedFile[], stagingService: StagingService, fileStateService: FileStateService, dryRun?: boolean): Promise<string>;
+    /**
+     * Replaces a specific string block within an existing file using fuzzy matching.
+     * Leverages StringMatcher to handle LLM quote/whitespace inconsistencies.
+     */
+    replaceInFile(projectRoot: string, filePath: string, oldString: string, newString: string, stagingService: StagingService, fileStateService: FileStateService, dryRun?: boolean): Promise<string>;
 }
 //# sourceMappingURL=FileWriterService.d.ts.map

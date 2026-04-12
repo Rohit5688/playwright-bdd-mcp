@@ -53,20 +53,15 @@ export interface McpConfig {
    */
   tsconfigPath?: string;
 
-  /** Default Playwright test timeout in milliseconds.
-   * @default 30000
-   */
-  timeout: number;
-
-  /** Number of Playwright retries on failure.
-   * @default 1
-   */
-  retries: number;
-
-  /** Max attempts for the validate_and_write self-healing loop.
-   * @default 3
-   */
-  selfHealMaxRetries: number;
+  /** Configuration for environment timeouts */
+  timeouts: {
+    /** Maximum time (in ms) for a single test run shell execution */
+    testRun: number;
+    /** Maximum time (in ms) to wait for a Playwright session to start or navigate. */
+    sessionStart: number;
+    /** Max attempts for the validate_and_write self-healing loop. */
+    healingMax: number;
+  };
 
   /**
    * How many scenarios must share the same first Given step
@@ -74,6 +69,9 @@ export interface McpConfig {
    * @default 3
    */
   backgroundBlockThreshold: number;
+
+  /** Number of retries for test execution */
+  retries: number;
 
   /**
    * Auth strategy for the project:
@@ -108,12 +106,6 @@ export interface McpConfig {
    */
   waitStrategy: 'networkidle' | 'domcontentloaded' | 'load';
 
-  /**
-   * Maximum time (in ms) for a single test run shell execution (npx bddgen && npx playwright test).
-   * If exceeded, the process is killed and a timeout error is returned.
-   * @default 120000
-   */
-  testRunTimeout: number;
 
   /**
    * Path to store/read special architecture notes about custom wrappers or patterns.
@@ -166,17 +158,17 @@ export const DEFAULT_CONFIG: McpConfig = {
     testData: 'test-data',
   },
   browsers: ['chromium'],
-  // playwrightConfig and tsconfigPath intentionally left undefined:
-  // undefined = use Playwright/tsc's own discovery logic
-  timeout: 30000,
+  timeouts: {
+    testRun: 120_000,
+    sessionStart: 30000,
+    healingMax: 3
+  },
   retries: 1,
-  selfHealMaxRetries: 3,
   backgroundBlockThreshold: 3,
   authStrategy: 'users-json',
   currentEnvironment: 'staging',
   environments: ['local', 'staging', 'prod'],
   waitStrategy: 'domcontentloaded',
-  testRunTimeout: 120_000,
   architectureNotesPath: 'docs/mcp-architecture-notes.md',
   additionalDataPaths: [],
   a11yStandards: ['wcag2aa'],

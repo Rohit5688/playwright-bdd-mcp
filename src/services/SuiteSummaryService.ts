@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { McpConfigService } from './McpConfigService.js';
 
 export interface ScenarioSummary {
   feature: string;
@@ -27,7 +28,9 @@ export interface SuiteReport {
 export class SuiteSummaryService {
 
   public summarize(projectRoot: string): SuiteReport {
-    const featuresDir = path.join(projectRoot, 'features');
+    const configService = new McpConfigService();
+    const config = configService.read(projectRoot);
+    const featuresDir = path.join(projectRoot, config.dirs.features);
     const features: ScenarioSummary[] = [];
     const tagBreakdown: Record<string, number> = {};
     let totalScenarios = 0;
@@ -39,7 +42,7 @@ export class SuiteSummaryService {
         totalScenarios: 0,
         tagBreakdown: {},
         features: [],
-        plainEnglishSummary: 'No features/ directory found. Run setup_project first.',
+        plainEnglishSummary: `No ${config.dirs.features}/ directory found. Run setup_project first.`,
       };
     }
 

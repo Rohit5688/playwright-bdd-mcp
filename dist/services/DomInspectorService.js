@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
+import { ScreenshotStorage } from '../utils/ScreenshotStorage.js';
+import { SmartDomExtractor } from '../utils/SmartDomExtractor.js';
 export class DomInspectorService {
-    async inspect(url, waitForSelector, storageState, includeIframes, loginMacro) {
+    async inspect(url, waitForSelector, storageState, includeIframes, loginMacro, timeoutMs = 30000) {
         let browser = null;
         try {
             browser = await chromium.launch({ headless: true });
@@ -12,14 +14,14 @@ export class DomInspectorService {
             const page = await context.newPage();
             // Dynamic Macro Login sequence
             if (loginMacro) {
-                await page.goto(loginMacro.loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await page.goto(loginMacro.loginUrl, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
                 await page.fill(loginMacro.userSelector, loginMacro.usernameValue);
                 await page.fill(loginMacro.passSelector, loginMacro.passwordValue);
                 await page.click(loginMacro.submitSelector);
                 await page.waitForLoadState('networkidle').catch(() => { });
             }
             // Navigate to ultimate destination
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
             await page.waitForLoadState('networkidle').catch(() => { });
             if (waitForSelector) {
                 await page.waitForSelector(waitForSelector, { timeout: 5000 }).catch(() => { });
@@ -53,6 +55,13 @@ export class DomInspectorService {
                 });
             }
             const result = { mainFrame: mainSnapshot };
+            try {
+                const buffer = await page.screenshot({ type: 'png', fullPage: false });
+                result.screenshot = ScreenshotStorage.storeBase64(process.cwd(), 'dom-inspect', buffer.toString('base64'));
+            }
+            catch (e) {
+                // Soft fail screenshot capture
+            }
             // Optional recursive pass for inner frames (like Stripe fields or generic embedded sites)
             if (includeIframes) {
                 result.iframes = [];
@@ -69,7 +78,9 @@ export class DomInspectorService {
                     }
                 }
             }
-            return JSON.stringify(result, null, 2);
+            const rawJson = JSON.stringify(result, null, 2);
+            // TASK-62: transform raw AOM JSON → pruned Actionable Markdown
+            return SmartDomExtractor.extract(rawJson, url);
         }
         catch (error) {
             // --- 18A FIX: Friendly, actionable error messages ---

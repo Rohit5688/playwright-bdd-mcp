@@ -12,11 +12,11 @@ describe('SecurityUtils - Phase 35 Smoke Tests', () => {
     assert.doesNotThrow(() => validateProjectPath(projectRoot, 'features/login.feature'));
     
     // Traversal attempts
-    assert.throws(() => validateProjectPath(projectRoot, '../etc/passwd'), /SECURITY/);
-    assert.throws(() => validateProjectPath(projectRoot, 'features/../../etc/passwd'), /SECURITY/);
+    assert.throws(() => validateProjectPath(projectRoot, '../etc/passwd'), /Permission denied/);
+    assert.throws(() => validateProjectPath(projectRoot, 'features/../../etc/passwd'), /Permission denied/);
     
     // Absolute path outside root
-    assert.throws(() => validateProjectPath(projectRoot, '/etc/passwd'), /SECURITY/);
+    assert.throws(() => validateProjectPath(projectRoot, '/etc/passwd'), /Permission denied/);
   });
 
   test('sanitizeShellArg should drop dangerous metacharacters', () => {

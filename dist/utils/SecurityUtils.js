@@ -1,3 +1,4 @@
+import { McpErrors, McpError, McpErrorCode } from '../types/ErrorSystem.js';
 import * as path from 'path';
 /**
  * SecurityUtils — Phase 35
@@ -69,7 +70,7 @@ export function validateProjectPath(projectRoot, relativePath) {
     // Ensure the resolved path starts with the project root + path separator
     // (or IS the project root itself)
     if (!resolvedPath.startsWith(normalizedRoot + path.sep) && resolvedPath !== normalizedRoot) {
-        throw new Error(`⛔ PATH SECURITY VIOLATION: Resolved path "${resolvedPath}" escapes the project root "${normalizedRoot}".\n` +
+        throw McpErrors.permissionDenied(resolvedPath, `PATH SECURITY VIOLATION: Resolved path "${resolvedPath}" escapes the project root "${normalizedRoot}".\n` +
             `   The relative path "${relativePath}" contains a traversal or absolute path injection.\n` +
             `   Only paths within the project root are allowed.`);
     }
@@ -162,5 +163,31 @@ export function auditGeneratedCode(files) {
         }
     }
     return violations;
+}
+// ─────────────────────────────────────────────────────
+// 5. Safe JSON Parse
+// ─────────────────────────────────────────────────────
+/**
+ * Wraps JSON.parse with try/catch to prevent uncaught SyntaxErrors
+ * from crashing tool handlers when parsing user-supplied or external JSON.
+ *
+ * Returns `null` on parse failure. Callers must handle the null case explicitly.
+ *
+ * @param text  - Raw JSON string (may be malformed).
+ * @param label - Optional label for the error log (helps with debugging).
+ * @returns Parsed value, or null if invalid JSON.
+ *
+ * @example
+ * const config = safeJsonParse(rawConfigText, 'mcp-config.json');
+ * if (config === null) throw McpErrors.configValidationFailed("mcp-config.json is not valid JSON");
+ */
+export function safeJsonParse(text, label) {
+    try {
+        return JSON.parse(text);
+    }
+    catch {
+        console.error(`[SecurityUtils] safeJsonParse failed${label ? ` for "${label}"` : ''}: invalid JSON`);
+        return null;
+    }
 }
 //# sourceMappingURL=SecurityUtils.js.map

@@ -1,4 +1,5 @@
 import { Project, Node, SyntaxKind } from 'ts-morph';
+import { McpErrors, McpError } from '../types/ErrorSystem.js';
 
 export class ASTScrutinizer {
   /**
@@ -11,8 +12,15 @@ export class ASTScrutinizer {
       return;
     }
 
-    const project = new Project({ compilerOptions: { strict: false }, skipAddingFilesFromTsConfig: true });
-    const sourceFile = project.createSourceFile('temp.ts', fileContent);
+    let project: Project;
+    let sourceFile;
+
+    try {
+      project = new Project({ compilerOptions: { strict: false }, skipAddingFilesFromTsConfig: true });
+      sourceFile = project.createSourceFile('temp.ts', fileContent);
+    } catch (e: any) {
+      throw McpErrors.astParseFailed(fileName, e);
+    }
 
     // 1. Check for suspicious "TODO" or "FIXME" comments anywhere in the file
     const comments = sourceFile.getStatementsWithComments().map(s => s.getText());
@@ -22,9 +30,8 @@ export class ASTScrutinizer {
     
     for (const keyword of lazyKeywords) {
       if (fullText.toLowerCase().includes(keyword.toLowerCase())) {
-        throw new Error(
-          `Execution Rejected (Code 406): File '${fileName}' contains lazy scaffolding. ` +
-          `Found mocking placeholder '${keyword}'. You MUST provide the full, working implementation without TODOs.`
+        throw McpErrors.projectValidationFailed(
+          `File '${fileName}' contains lazy scaffolding. Found mocking placeholder '${keyword}'. You MUST provide the full, working implementation without TODOs.`
         );
       }
     }
@@ -35,9 +42,8 @@ export class ASTScrutinizer {
       for (const method of cls.getMethods()) {
         const bodyContent = method.getBodyText()?.trim();
         if (bodyContent === '') {
-          throw new Error(
-             `Execution Rejected (Code 406): File '${fileName}' contains an empty method '${method.getName()}'. ` +
-             `You MUST write the complete Playwright interaction logic instead of leaving empty scaffolding blocks.`
+          throw McpErrors.projectValidationFailed(
+             `File '${fileName}' contains an empty method '${method.getName()}'. You MUST write the complete Playwright interaction logic instead of leaving empty scaffolding blocks.`
           );
         }
       }
@@ -47,9 +53,8 @@ export class ASTScrutinizer {
     for (const fn of functions) {
         const bodyContent = fn.getBodyText()?.trim();
         if (bodyContent === '') {
-          throw new Error(
-             `Execution Rejected (Code 406): File '${fileName}' contains an empty function '${fn.getName() || 'anonymous'}'. ` +
-             `You MUST write the complete logic instead of leaving empty scaffolding blocks.`
+          throw McpErrors.projectValidationFailed(
+             `File '${fileName}' contains an empty function '${fn.getName() || 'anonymous'}'. You MUST write the complete logic instead of leaving empty scaffolding blocks.`
           );
         }
     }
@@ -60,9 +65,8 @@ export class ASTScrutinizer {
       const body = arrow.getBody();
       if (Node.isBlock(body)) {
         if (body.getStatements().length === 0 && !body.getText().includes('//')) {
-             throw new Error(
-             `Execution Rejected (Code 406): File '${fileName}' contains an empty arrow function block. ` +
-             `You MUST provide the full, working implementation instead of empty blocks.`
+             throw McpErrors.projectValidationFailed(
+             `File '${fileName}' contains an empty arrow function block. You MUST provide the full, working implementation instead of empty blocks.`
           );
         }
       }

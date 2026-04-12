@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext, Page, Locator } from 'playwright';
+import { withRetry, RetryPolicies } from '../utils/RetryEngine.js';
 
 export interface SessionOptions {
   headless?: boolean;
@@ -26,10 +27,15 @@ export class PlaywrightSessionService {
     }
 
     try {
-      this.browser = await chromium.launch({
-        headless: options.headless !== false, // default to headless unless explicitly false
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
-      });
+      // TF-NEW-02: Retry browser launch — transient in CI (missing binary, stale lock, etc.)
+      const launchResult = await withRetry(
+        () => chromium.launch({
+          headless: options.headless !== false, // default to headless unless explicitly false
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+        }),
+        RetryPolicies.playwrightBrowser
+      );
+      this.browser = launchResult.value;
 
       const contextOptions: Parameters<Browser['newContext']>[0] = {
         viewport: options.viewport || { width: 1280, height: 720 }
@@ -81,7 +87,7 @@ export class PlaywrightSessionService {
   /**
    * Navigates the persistent session to a URL.
    */
-  public async navigate(url: string, waitUntil: 'load' | 'domcontentloaded' | 'networkidle' = 'load'): Promise<string> {
+  public async navigate(url: string, waitUntil: 'load' | 'domcontentloaded' | 'networkidle' = 'load', timeoutMs: number = 30000): Promise<string> {
     if (!this.page) {
        // Auto-start if forgotten
        await this.startSession();
@@ -92,7 +98,7 @@ export class PlaywrightSessionService {
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
           finalUrl = `https://${url}`;
       }
-      const response = await this.page!.goto(finalUrl, { waitUntil, timeout: 30000 });
+      const response = await this.page!.goto(finalUrl, { waitUntil, timeout: timeoutMs });
       
       return JSON.stringify({
         success: true,

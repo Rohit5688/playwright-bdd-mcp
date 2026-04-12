@@ -47,4 +47,19 @@ export interface AuditableFile {
  * @returns Array of violation strings (empty = clean)
  */
 export declare function auditGeneratedCode(files: AuditableFile[]): string[];
+/**
+ * Wraps JSON.parse with try/catch to prevent uncaught SyntaxErrors
+ * from crashing tool handlers when parsing user-supplied or external JSON.
+ *
+ * Returns `null` on parse failure. Callers must handle the null case explicitly.
+ *
+ * @param text  - Raw JSON string (may be malformed).
+ * @param label - Optional label for the error log (helps with debugging).
+ * @returns Parsed value, or null if invalid JSON.
+ *
+ * @example
+ * const config = safeJsonParse(rawConfigText, 'mcp-config.json');
+ * if (config === null) throw McpErrors.configValidationFailed("mcp-config.json is not valid JSON");
+ */
+export declare function safeJsonParse<T = unknown>(text: string, label?: string): T | null;
 //# sourceMappingURL=SecurityUtils.d.ts.map

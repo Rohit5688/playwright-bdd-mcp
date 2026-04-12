@@ -11,17 +11,17 @@ export const DEFAULT_CONFIG = {
         testData: 'test-data',
     },
     browsers: ['chromium'],
-    // playwrightConfig and tsconfigPath intentionally left undefined:
-    // undefined = use Playwright/tsc's own discovery logic
-    timeout: 30000,
+    timeouts: {
+        testRun: 120_000,
+        sessionStart: 30000,
+        healingMax: 3
+    },
     retries: 1,
-    selfHealMaxRetries: 3,
     backgroundBlockThreshold: 3,
     authStrategy: 'users-json',
     currentEnvironment: 'staging',
     environments: ['local', 'staging', 'prod'],
-    waitStrategy: 'networkidle',
-    testRunTimeout: 120_000,
+    waitStrategy: 'domcontentloaded',
     architectureNotesPath: 'docs/mcp-architecture-notes.md',
     additionalDataPaths: [],
     a11yStandards: ['wcag2aa'],

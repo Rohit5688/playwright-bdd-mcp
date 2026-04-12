@@ -1,3 +1,4 @@
+import { McpErrors, McpError, McpErrorCode } from '../types/ErrorSystem.js';
 /**
  * SandboxEngine.ts — Secure V8-Isolated Code Execution for Token Optimization
  *
@@ -17,6 +18,7 @@
  */
 
 import * as vm from 'node:vm';
+import * as path from 'node:path';
 
 /**
  * Defines the shape of a service method that can be exposed to the sandbox.
@@ -38,8 +40,14 @@ export interface SandboxApiRegistry {
 export interface SandboxOptions {
   /** Max execution time in milliseconds. Default: 10000 (10s). */
   timeoutMs?: number;
-  /** Maximum memory in MB (advisory — Node vm doesn't enforce hard limits). */
+  /** Maximum memory in MB (advisory — Node vm doesn\'t enforce hard limits). */
   maxMemoryMb?: number;
+  /**
+   * If provided, all `forge.api.readFile`-style paths will be validated to
+   * ensure they resolve within this root. Prevents sandbox scripts from
+   * reaching outside the project directory.
+   */
+  projectRoot?: string;
 }
 
 /**
@@ -58,7 +66,36 @@ export interface SandboxResult {
   logs: string[];
 }
 
-// --- Blocked patterns for static code validation ---
+// ─── Path guard ───────────────────────────────────────────────────────────────
+
+/**
+ * Validates that a file path resolves within the given project root.
+ * Used by sandbox API methods that accept caller-supplied file paths.
+ *
+ * @param projectRoot Absolute path to the project root.
+ * @param filePath    Caller-supplied (possibly relative) file path.
+ * @returns           The resolved absolute path.
+ * @throws            Error if the resolved path escapes the project root.
+ */
+export function resolveSafePath(projectRoot: string, filePath: string): string {
+  const normalizedRoot = path.resolve(projectRoot);
+  const resolvedPath = path.resolve(normalizedRoot, filePath);
+
+  if (
+    !resolvedPath.startsWith(normalizedRoot + path.sep) &&
+    resolvedPath !== normalizedRoot
+  ) {
+    throw McpErrors.permissionDenied(
+      resolvedPath,
+      `SANDBOX PATH SECURITY: "${filePath}" resolves to "${resolvedPath}" ` +
+      `which is outside the project root "${normalizedRoot}". Path traversal blocked.`
+    );
+  }
+
+  return resolvedPath;
+}
+
+// ─── Blocked patterns for static code validation ──────────────────────────────
 const BLOCKED_PATTERNS = [
   /\beval\s*\(/,
   /\bnew\s+Function\s*\(/,
@@ -153,7 +190,7 @@ export async function executeSandbox(
       try {
         return await fn(...args);
       } catch (err) {
-        throw new Error(`forge.api.${name}() failed: ${(err as Error).message}`);
+        throw McpErrors.sandboxApiFailed(`forge.api.${name}() failed`, err as Error);
       }
     };
   }
@@ -172,27 +209,30 @@ export async function executeSandbox(
     // Safe console (captured, not printed)
     console: createSafeConsole(logs),
 
-    // Standard safe builtins (frozen to prevent prototype pollution)
+    // Standard safe builtins
+    // TASK-09: Freeze mutable constructors to prevent prototype pollution.
+    // A sandbox script that can mutate Array.prototype or Object.prototype
+    // could corrupt host-side data structures accessed through the API bridge.
     JSON: Object.freeze(JSON),
     Math: Object.freeze(Math),
-    Date,
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    Map,
-    Set,
-    WeakMap,
-    WeakSet,
-    RegExp,
-    Error,
-    TypeError,
-    RangeError,
-    SyntaxError,
-    ReferenceError,
-    EvalError,
-    URIError,
+    Date: Object.freeze(Date),
+    Array: Object.freeze(Array),
+    Object: Object.freeze(Object),
+    String: Object.freeze(String),
+    Number: Object.freeze(Number),
+    Boolean: Object.freeze(Boolean),
+    Map: Object.freeze(Map),
+    Set: Object.freeze(Set),
+    WeakMap: Object.freeze(WeakMap),
+    WeakSet: Object.freeze(WeakSet),
+    RegExp: Object.freeze(RegExp),
+    Error: Object.freeze(Error),
+    TypeError: Object.freeze(TypeError),
+    RangeError: Object.freeze(RangeError),
+    SyntaxError: Object.freeze(SyntaxError),
+    ReferenceError: Object.freeze(ReferenceError),
+    EvalError: Object.freeze(EvalError),
+    URIError: Object.freeze(URIError),
     parseInt,
     parseFloat,
     isNaN,
@@ -278,7 +318,7 @@ export async function executeSandbox(
       logs,
     };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = err instanceof Error ? err.toString() : String(err);
     return {
       success: false,
       error: errorMessage,

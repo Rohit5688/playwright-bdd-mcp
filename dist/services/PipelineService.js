@@ -1,3 +1,4 @@
+import { McpErrors, McpError, McpErrorCode } from '../types/ErrorSystem.js';
 import fs from 'fs';
 import path from 'path';
 export class PipelineService {
@@ -93,7 +94,7 @@ playwright_tests:
             targetPath = path.join(projectRoot, 'Jenkinsfile');
         }
         else {
-            throw new Error(`Unsupported pipeline provider: ${options.provider}`);
+            throw McpErrors.invalidParameter("provider", `Unsupported pipeline provider: ${options.provider}`);
         }
         fs.writeFileSync(targetPath, content, 'utf8');
         return targetPath;

@@ -1,3 +1,4 @@
+import { EnvManagerService } from './EnvManagerService.js';
 export interface SetupResult {
     projectRoot: string;
     installed: boolean;
@@ -18,15 +19,18 @@ export interface SetupResult {
  */
 export declare class ProjectSetupService {
     private readonly envManager;
-    /**
-     * Full first-time setup. Throws if critical config files already exist.
-     */
-    setup(projectRoot: string): Promise<SetupResult>;
+    constructor(envManager?: EnvManagerService);
+    setup(projectRoot: string): Promise<string>;
     /**
      * Safe to run at any time — only generates files that are missing.
      * Never overwrites existing files. Used by repair_project and upgrade_project.
      */
     repairProject(projectRoot: string): Promise<string>;
     private _scaffold;
+    syncConfigSchema(projectRoot: string): string[];
+    generateConfigTemplate(projectRoot: string): string;
+    scaffoldMcpConfigReference(projectRoot: string): void;
+    scaffoldPromptCheatbook(projectRoot: string): void;
+    scanConfigureMe(projectRoot: string): string[];
 }
 //# sourceMappingURL=ProjectSetupService.d.ts.map

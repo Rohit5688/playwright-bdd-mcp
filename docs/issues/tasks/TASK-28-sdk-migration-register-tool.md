@@ -79,7 +79,7 @@ server.registerTool(
 | `export_team_knowledge` | true | false | true | false |
 | `generate_ci_pipeline` | false | false | false | false |
 | `export_jira_bug` | true | false | true | false |
-| `migrate_from_selenium` | true | false | true | false |
+| `migrate_test` | true | false | true | false |
 | `suggest_refactorings` | true | false | false | false |
 | `generate_fixture` | true | false | true | false |
 | `analyze_coverage_gaps` | true | false | false | false |

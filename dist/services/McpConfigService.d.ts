@@ -43,24 +43,23 @@ export interface McpConfig {
      * @example 'config/tsconfig.test.json'
      */
     tsconfigPath?: string;
-    /** Default Playwright test timeout in milliseconds.
-     * @default 30000
-     */
-    timeout: number;
-    /** Number of Playwright retries on failure.
-     * @default 1
-     */
-    retries: number;
-    /** Max attempts for the validate_and_write self-healing loop.
-     * @default 3
-     */
-    selfHealMaxRetries: number;
+    /** Configuration for environment timeouts */
+    timeouts: {
+        /** Maximum time (in ms) for a single test run shell execution */
+        testRun: number;
+        /** Maximum time (in ms) to wait for a Playwright session to start or navigate. */
+        sessionStart: number;
+        /** Max attempts for the validate_and_write self-healing loop. */
+        healingMax: number;
+    };
     /**
      * How many scenarios must share the same first Given step
      * before a Background: block is auto-generated.
      * @default 3
      */
     backgroundBlockThreshold: number;
+    /** Number of retries for test execution */
+    retries: number;
     /**
      * Auth strategy for the project:
      *  - "none"       → no login step generated
@@ -86,15 +85,9 @@ export interface McpConfig {
     /**
      * Load state strategy to use after navigation calls.
      * Defaults to 'networkidle' which works for most SPAs.
-     * @default 'networkidle'
+     * @default 'domcontentloaded'
      */
     waitStrategy: 'networkidle' | 'domcontentloaded' | 'load';
-    /**
-     * Maximum time (in ms) for a single test run shell execution (npx bddgen && npx playwright test).
-     * If exceeded, the process is killed and a timeout error is returned.
-     * @default 120000
-     */
-    testRunTimeout: number;
     /**
      * Path to store/read special architecture notes about custom wrappers or patterns.
      * @default 'docs/mcp-architecture-notes.md'

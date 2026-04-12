@@ -11,7 +11,18 @@
  *   APPLICATION_FAILURE - Assertion on value mismatch (e.g. wrong text, wrong URL)
  *   UNKNOWN            - Anything else (network, auth, flaky infra)
  */
+import { ObservabilityService } from './ObservabilityService.js';
+import { DnaTrackerService } from './DnaTrackerService.js';
+import { LearningService } from './LearningService.js';
+import { ExtensionLoader } from '../utils/ExtensionLoader.js';
 export class SelfHealingService {
+    attemptCount = new Map();
+    dnaTracker;
+    learner;
+    constructor(dnaTracker, learner) {
+        this.dnaTracker = dnaTracker || new DnaTrackerService();
+        this.learner = learner || new LearningService();
+    }
     /** Patterns that strongly indicate a scripting / locator problem (not an app bug). */
     SCRIPTING_PATTERNS = [
         /element\(s\) not found/i,
@@ -55,14 +66,71 @@ export class SelfHealingService {
         /toHaveURL.*failed/i,
         /AssertionError/i,
     ];
-    analyzeFailure(testOutput, memoryPrompt = '') {
+    analyzeFailure(testOutput, memoryPrompt = '', contextId = 'default', projectRoot) {
+        const attempts = (this.attemptCount.get(contextId) ?? 0) + 1;
+        this.attemptCount.set(contextId, attempts);
+        if (attempts > 3) {
+            ObservabilityService.getInstance().warning(contextId === 'default' ? undefined : contextId, 'MAX_HEAL_ATTEMPTS_REACHED', { contextId, attempts });
+            return {
+                kind: 'UNKNOWN',
+                canAutoHeal: false,
+                failedLocators: [],
+                failedFiles: [],
+                failedLines: [],
+                rawError: testOutput,
+                healInstruction: `MAX_HEAL_ATTEMPTS_REACHED: You have attempted to self-heal this test ${attempts} times without success. Please call request_user_clarification to ask the user for help.`
+            };
+        }
         const kind = this.classifyFailure(testOutput);
         const failedLocators = this.extractFailedLocators(testOutput);
         const failedFiles = this.extractFailedFiles(testOutput);
         const failedLines = this.extractFailedLines(testOutput);
+        // TASK-61: DNA Tracker — attempt LCS near-match BEFORE LLM fallback
+        let dnaHint = '';
+        if (projectRoot && failedLocators.length > 0) {
+            for (const loc of failedLocators) {
+                const dnaResult = this.dnaTracker.findNearMatch(projectRoot, loc);
+                if (dnaResult.found && dnaResult.bestCandidate) {
+                    const best = dnaResult.bestCandidate;
+                    dnaHint += `\n\n[DNA TRACKER — Heuristic Near-Match (confidence: ${(dnaResult.confidence * 100).toFixed(0)}%)]`
+                        + `\n  Failed: ${loc}`
+                        + `\n  Best match from DNA store: "${best.selector}"`
+                        + `\n  Tag: ${best.tag}, ID: "${best.id}", Text: "${best.text}"`
+                        + `\n  Last seen: ${best.lastSeen}`
+                        + `\n  Action: Try replacing the failed locator with "${best.selector}" before doing a full DOM re-inspection.`;
+                    ObservabilityService.getInstance().warning(undefined, 'dna_near_match', { failed: loc, match: best.selector, confidence: dnaResult.confidence });
+                }
+            }
+        }
+        if (projectRoot)
+            memoryPrompt += ExtensionLoader.loadExtensionsForPrompt(projectRoot);
         const canAutoHeal = kind === 'SCRIPTING_FAILURE' || kind === 'SYNCHRONIZATION_FAILURE' || kind === 'AD_INTERCEPTED_FAILURE';
-        const healInstruction = this.buildHealInstruction(kind, failedLocators, failedFiles, failedLines, testOutput, memoryPrompt);
+        const healInstruction = this.buildHealInstruction(kind, failedLocators, failedFiles, failedLines, testOutput, memoryPrompt) + dnaHint;
         return { kind, canAutoHeal, failedLocators, failedFiles, failedLines, rawError: testOutput, healInstruction };
+    }
+    resetAttempts(contextId = 'default') {
+        this.attemptCount.delete(contextId);
+    }
+    /**
+     * TASK-41: Called on successful heal. Auto-learns the fix into mcp-learning.json
+     * and increments DNA heal counter for the repaired selector.
+     */
+    notifyHealSuccess(projectRoot, failedSelector, fixedSelector, contextId = 'default') {
+        if (!projectRoot)
+            return;
+        try {
+            // Auto-learn the fix
+            this.learner.learn(projectRoot, `Locator failed: ${failedSelector}`, `Replaced with: ${fixedSelector}`, ['auto-heal', 'locator']);
+            // Update DNA heal count for the successful selector
+            this.dnaTracker.recordSuccessfulHeal(projectRoot, fixedSelector);
+            // Reset attempt counter so future failures start fresh
+            this.resetAttempts(contextId);
+            ObservabilityService.getInstance().warning(undefined, 'auto_learn_success', { failedSelector, fixedSelector });
+        }
+        catch (err) {
+            // Non-fatal — log but do not throw
+            ObservabilityService.getInstance().warning(undefined, 'auto_learn_failed', { error: String(err) });
+        }
     }
     classifyFailure(output) {
         // Check AD INTERCEPTION first as it's a specific blocker

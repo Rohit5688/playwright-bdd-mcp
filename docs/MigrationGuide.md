@@ -2,7 +2,7 @@
 
 Porting a legacy Selenium WebDriver repository (Java, Python, C#) to modern Playwright-BDD is notoriously difficult because Playwright uses asynchronous, stateless locators, while Selenium uses synchronous, stateful WebElements. 
 
-The Playwright-BDD MCP Server solves this using a **Hybrid AST/Regex Heuristics Engine**. By leveraging the \`migrate_from_selenium\` tool, the AI acts as a translation compiler that understands chronological flow paradigms, not just 1-to-1 syntax mapping.
+The Playwright-BDD MCP Server solves this using a **Hybrid AST/Regex Heuristics Engine**. By leveraging the \`migrate_test\` tool, the AI acts as a translation compiler that understands chronological flow paradigms, not just 1-to-1 syntax mapping.
 
 ---
 
@@ -17,16 +17,16 @@ You do **not** need to manually convert files line-by-line. Instead, you provide
 ### Recommended Workflow Prompts
 
 **Scenario A: Migrating a single Page Object**
-> "I want to migrate my old Java Selenium Page Object. Here is the code: [paste code]. Please run the `migrate_from_selenium` tool with `sourceDialect: java` and rewrite this as a TypeScript Playwright POM."
+> "I want to migrate my old Java Selenium Page Object. Here is the code: [paste code]. Please run the `migrate_test` tool with `sourceDialect: java` and rewrite this as a TypeScript Playwright POM."
 
 **Scenario B: Procedural Deconstruction (Test Script to POM + BDD)**
-> "Here is a massive standalone Python Selenium script that tests the checkout flow: [paste code]. Pass this to the `migrate_from_selenium` tool. Deconstruct it: extract the UI actions into a new `CheckoutPage.ts` Page Object, and generate the corresponding `checkout.feature` Gherkin file."
+> "Here is a massive standalone Python Selenium script that tests the checkout flow: [paste code]. Pass this to the `migrate_test` tool. Deconstruct it: extract the UI actions into a new `CheckoutPage.ts` Page Object, and generate the corresponding `checkout.feature` Gherkin file."
 
 ---
 
 ## 🧠 What the Tool Offers (Engine Capabilities)
 
-The `migrate_from_selenium` tool enforces strict architectural transformations. When you call it, it injects a rigid system prompt into the AI that forces it to follow these rules:
+The `migrate_test` tool enforces strict architectural transformations. When you call it, it injects a rigid system prompt into the AI that forces it to follow these rules:
 
 ### 1. Wait Strategy Cleanup (Implicit/Explicit Waits)
 Selenium relies heavily on `Thread.sleep()` and `WebDriverWait(driver, 10).until(ExpectedConditions.elementToBeClickable(...))`.

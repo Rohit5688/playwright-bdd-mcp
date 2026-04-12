@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
 import { Questioner } from '../utils/Questioner.js';
+import { ExtensionLoader } from '../utils/ExtensionLoader.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -67,7 +68,7 @@ export class EnvironmentCheckService {
     const failing = checks.filter(c => c.status === 'fail');
     const warnings = checks.filter(c => c.status === 'warn');
     const ready = failing.length === 0;
-    const summary = this.buildSummary(checks, ready, failing.length, warnings.length);
+    const summary = this.buildSummary(checks, ready, failing.length, warnings.length) + ExtensionLoader.loadExtensionsForPrompt(projectRoot);
 
     return { ready, checks, summary };
   }

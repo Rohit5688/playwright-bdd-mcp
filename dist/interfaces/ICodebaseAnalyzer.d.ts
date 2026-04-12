@@ -88,6 +88,15 @@ export interface CodebaseAnalysisResult {
     importAliases?: Record<string, string[]>;
     packageScripts?: Record<string, string>;
     recommendation: string;
+    warnings?: string[];
+    dependencies?: {
+        hasPlaywright: boolean;
+        hasPlaywrightBdd: boolean;
+        hasCucumber: boolean;
+        frameworkDetected: string;
+        implicitFrameworkDetected: boolean;
+        transitiveDeps: string[];
+    };
 }
 export interface ICodebaseAnalyzer {
     /**

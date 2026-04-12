@@ -82,9 +82,9 @@ Status markers: `✅ DONE` · `⬜ TODO` · `🔌 WIRE ONLY` (no new code, just 
 **Effort:** S each → ~1.5h total  
 **Files:** `src/index.ts` only
 
-- [ ] 🔌 Wire `RefactoringService` → register `suggest_refactorings` tool
-- [ ] 🔌 Wire `SeleniumMigrationService` → register `migrate_test` tool  
-- [ ] 🔌 Wire `Questioner.ts` → register `request_user_clarification` tool
+- [x] 🔌 Wire `RefactoringService` → register `suggest_refactorings` tool
+- [x] 🔌 Wire `SeleniumMigrationService` → register `migrate_test` tool  
+- [x] 🔌 Wire `Questioner.ts` → register `request_user_clarification` tool
 
 > These services are fully implemented. No new code. Just `server.registerTool()` calls modelled on AppForge equivalents.
 
@@ -225,10 +225,10 @@ Verified:
 **Effort:** M  
 **Files:** new `src/services/ObservabilityService.ts`, `src/index.ts`
 
-- [ ] JSONL logging to `projectRoot/mcp-logs/session-{timestamp}.jsonl`
-- [ ] Log: tool name, input args summary, response summary, duration ms, error if any
-- [ ] Secret Masker: redact env vars, passwords, tokens before logging
-- [ ] Wrap all tool dispatch in `index.ts` with `toolStart` / `toolEnd` pairs
+- [x] JSONL logging to `projectRoot/mcp-logs/session-{timestamp}.jsonl`
+- [x] Log: tool name, input args summary, response summary, duration ms, error if any
+- [x] Secret Masker: redact env vars, passwords, tokens before logging
+- [x] Wrap all tool dispatch in `index.ts` with `toolStart` / `toolEnd` pairs
 
 ---
 
@@ -237,9 +237,9 @@ Verified:
 **Effort:** M  
 **Files:** new `src/services/PreFlightService.ts`, `src/index.ts`
 
-- [ ] Checks in order: Playwright installed → configured browsers installed → `baseUrl` reachable (HTTP GET, 5s timeout) → `mcp-config.json` valid
-- [ ] Register `check_playwright_ready` tool
-- [ ] Auto-run checks before `inspect_page_dom` and `run_cucumber_test` if not recently passed (cache result for 5 min)
+- [x] Checks in order: Playwright installed → configured browsers installed → `baseUrl` reachable (HTTP GET, 5s timeout) → `mcp-config.json` valid
+- [x] Register `check_playwright_ready` tool
+- [x] Auto-run checks before `inspect_page_dom` and `run_cucumber_test` if not recently passed (cache result for 5 min)
 
 ---
 
@@ -248,22 +248,22 @@ Verified:
 **Effort:** S+M+M+S+S → one "context management" sprint  
 **Files:** `src/services/ContextManager.ts` (new), `src/services/TokenBudgetService.ts` (new), `src/services/AnalyticsService.ts`, `DomInspectorService.ts`
 
-- [ ] TASK-35 — Global `CHARACTER_LIMIT = 25000` for tool responses. Smart truncation with message: "Output truncated. Use pagination or specific queries for more detail." Apply to `inspect_page_dom`, `analyze_codebase`, `run_cucumber_test`.
-- [ ] TASK-54 — `ErrorDistiller`: strip timestamps, non-critical driver logs, redundant stack traces from Playwright output. Return causal chain: Step → Selector → Root Failure. Apply to `run_cucumber_test` and `self_heal_test` outputs.
-- [ ] TASK-67 — `ContextManager`: after 3 DOM scans, compress the oldest into single-line summaries. Keep latest 2 full-size. Inject compacted context into generation tool headers.
-- [ ] TASK-47 — `TokenBudgetService`: heuristic token counter per session (chars ÷ 4). Register `get_token_budget` tool. Append `[Session Cost: ~N tokens]` footer to `analyze_codebase` and `inspect_page_dom`.
-- [ ] TASK-52 — `ContextPulse`: append a state summary block to short-lived tool responses every 5 turns. Register `get_system_state` tool for explicit refresh.
+- [x] TASK-35 — Global `CHARACTER_LIMIT = 25000` for tool responses. Smart truncation with message: "Output truncated. Use pagination or specific queries for more detail." Apply to `inspect_page_dom`, `analyze_codebase`, `run_cucumber_test`. ✅ DONE (responseHelper.ts)
+- [x] TASK-54 — `ErrorDistiller`: strip timestamps, non-critical driver logs, redundant stack traces from Playwright output. Return causal chain: Step → Selector → Root Failure. Apply to `run_cucumber_test` and `self_heal_test` outputs. ✅ DONE (src/utils/ErrorDistiller.ts)
+- [x] TASK-67 — `ContextManager`: after 3 DOM scans, compress the oldest into single-line summaries. Keep latest 2 full-size. Inject compacted context into generation tool headers. ✅ DONE (src/services/ContextManager.ts)
+- [x] TASK-47 — `TokenBudgetService`: heuristic token counter per session (chars ÷ 4). Register `get_token_budget` tool. Append `[Session Cost: ~N tokens]` footer to `analyze_codebase` and `inspect_page_dom`. ✅ DONE (src/services/TokenBudgetService.ts)
+- [x] TASK-52 — `ContextPulse`: append a state summary block to short-lived tool responses every 5 turns. Register `get_system_state` tool for explicit refresh. ✅ DONE (wired in index.ts)
 
 ---
 
 ### 3.5 · JSON-RPC Pipe Hardening + Error DNA
-**ID:** TASK-70  
+**ID:** TASK-70 ✅
 **Effort:** M  
 **Files:** `src/utils/Runner.ts`, `src/services/SelfHealingService.ts`
 
-- [ ] Refactor `Runner.ts` to `stdio: ['ignore', 'pipe', 'pipe']` — child-process logs never leak into MCP stdout
-- [ ] Implement `ErrorClassifier`: parse common Playwright/shell errors into DNA codes: `Infrastructure`, `Logic`, `Transient`
-- [ ] Update `self_heal_test` to receive structured Error DNA instead of raw stack trace
+- [x] Refactor `Runner.ts` to `stdio: ['ignore', 'pipe', 'pipe']` — child-process logs never leak into MCP stdout
+- [x] Implement `ErrorClassifier`: parse common Playwright/shell errors into DNA codes: `Infrastructure`, `Logic`, `Transient`
+- [x] Update `self_heal_test` to receive structured Error DNA instead of raw stack trace
 
 ---
 
@@ -272,9 +272,9 @@ Verified:
 **Effort:** M+M+S  
 **Files:** new `src/services/CoverageAnalysisService.ts`, new `src/services/BugReportService.ts`, `src/services/SelfHealingService.ts`
 
-- [ ] TF-NEW-10 — `CoverageAnalysisService`: parse feature files, count scenarios per page/route, build coverage heatmap, identify gaps (no negative tests, zero coverage pages, missing standard flows). Register `analyze_coverage` tool.
-- [ ] TF-NEW-11 — `BugReportService`: takes `testName`, `rawError`, `browser`, `baseUrl`, `appVersion`. Auto-classifies severity (timeout=P1, assertion=P2, crash=P0). Outputs Jira-ready Markdown. Register `export_bug_report` tool.
-- [ ] TF-NEW-12 — Max Turns Guard in `SelfHealingService`: `attemptCount: Map<string, number>`. If count > 3, return `MAX_HEAL_ATTEMPTS_REACHED` with suggestion to call `request_user_clarification`. Reset on successful heal. Log via `ObservabilityService`.
+- [x] TF-NEW-10 — `CoverageAnalysisService`: parse feature files, count scenarios per page/route, build coverage heatmap, identify gaps (no negative tests, zero coverage pages, missing standard flows). Register `analyze_coverage` tool.
+- [x] TF-NEW-11 — `BugReportService`: takes `testName`, `rawError`, `browser`, `baseUrl`, `appVersion`. Auto-classifies severity (timeout=P1, assertion=P2, crash=P0). Outputs Jira-ready Markdown. Register `export_bug_report` tool.
+- [x] TF-NEW-12 — Max Turns Guard in `SelfHealingService`: `attemptCount: Map<string, number>`. If count > 3, return `MAX_HEAL_ATTEMPTS_REACHED` with suggestion to call `request_user_clarification`. Reset on successful heal. Log via `ObservabilityService`.
 
 ---
 
@@ -302,12 +302,12 @@ Verified:
 ---
 
 ### 4.1 · Orchestration: Nano-Tool Consolidation + Atomic Workflows
-**IDs:** TASK-55 + TASK-58 + TASK-68  
+**IDs:** TASK-55 + TASK-58 + TASK-68 ✅  
 **Effort:** S+M+M → one OrchestrationService sprint  
 **Files:** new `src/services/OrchestrationService.ts`, `src/index.ts`
 
-- [ ] TASK-55 — Merge nano-tools: fold `set_credentials` + `inject_app_build` into `manage_config({operation:'write'})`. Fold `end_session` into `start_session({operation:'stop'})`. Remove standalone registrations.
-- [ ] TASK-58/68 — `OrchestrationService`: implement `create_test_atomically(description, xml, screenshot)` → one-hop: analyze → generate → validate → write. Implement `heal_and_verify_atomically(error, xml)` → one-hop: heal → verify → train. Register both tools.
+- [x] TASK-55 — Merge nano-tools: fold `set_credentials` + `inject_app_build` into `manage_config({operation:'write'/'set_credentials'/'inject_app'})`. Fold `end_session` into `start_session({operation:'stop'})`. Removed standalone `end_session` registration. ✅ DONE
+- [x] TASK-58/68 — `OrchestrationService`: implemented `createTestAtomically(projectRoot, files)` → stage → validate → write atomically. Implemented `healAndVerifyAtomically(projectRoot, error, xml, oldSelector, candidateSelector)` → verify selector on live session → auto-learn. Registered `create_test_atomically` and `heal_and_verify_atomically` tools. ✅ DONE
 
 **Unblocks:** 2-turn reduction in standard test generation flow
 
@@ -318,8 +318,8 @@ Verified:
 **Effort:** M+M → one NavigationGraphService sprint  
 **Files:** new `src/services/NavigationGraphService.ts`, new `src/tools/discover_app_flow.ts`
 
-- [ ] TASK-64 — `NavigationGraphService`: store URL graph (nodes) + transitions (edges). Persist to `.TestForge/navigation-map.json`. Export as Mermaid diagram.
-- [ ] TASK-45 — Register `discover_app_flow` tool: takes start URL, clicks links/buttons to discover new URLs, updates persistent graph. Inject "Known Navigation Paths" into `analyze_codebase` output so agent knows how to reach any screen.
+- [x] TASK-64 — `NavigationGraphService`: store URL graph (nodes) + transitions (edges). Persist to `.TestForge/navigation-map.json`. Export as Mermaid diagram. ✅ DONE (`src/services/NavigationGraphService.ts`)
+- [x] TASK-45 — Register `discover_app_flow` tool: takes start URL, clicks links/buttons to discover new URLs, updates persistent graph. Inject "Known Navigation Paths" into `analyze_codebase` output so agent knows how to reach any screen. ✅ DONE (wired in `src/index.ts`, `export_navigation_map` also registered)
 
 ---
 
@@ -338,8 +338,8 @@ Verified:
 **Effort:** M+M  
 **Files:** `src/services/DomInspectorService.ts`, new `src/utils/SmartDomExtractor.ts`, `src/services/TestGenerationService.ts`
 
-- [ ] TASK-62 — `SmartDomExtractor`: port noise-filtering logic from page-agent. `inspect_page_dom` returns pruned "Actionable Markdown" instead of raw HTML. Coordinate-based fallback for obscured element clicks.
-- [ ] TASK-34 — Prompt compression for large Gherkin files (truncate to last 3 screens context). Inject Mermaid navigation graph into `generate_cucumber_pom` prompts when graph exists.
+- [x] TASK-62 — `SmartDomExtractor`: port noise-filtering logic from page-agent. `inspect_page_dom` returns pruned "Actionable Markdown" instead of raw HTML. Coordinate-based fallback for obscured element clicks. ✅ DONE (`src/utils/SmartDomExtractor.ts`, wired in `DomInspectorService`)
+- [x] TASK-34 — Prompt compression for large Gherkin files (truncate to last 3 screens context). Inject Mermaid navigation graph into `generate_cucumber_pom` prompts when graph exists. ✅ DONE (`compressFeatureFiles()` + `injectNavGraph()` in `TestGenerationService`)
 
 ---
 
@@ -348,8 +348,8 @@ Verified:
 **Effort:** S+M  
 **Files:** `src/index.ts`, new `src/skills/` directory
 
-- [ ] TF-NEW-13 — Register `workflow_guide` tool. Static data (no service). Workflows: `new_project`, `write_test`, `run_and_heal`, `debug_flaky`, `all`. Tool description says "START HERE IF UNSURE."
-- [ ] TF-NEW-14 — Create `src/skills/playwright-bdd.md` (defineBddConfig, @Given/@When/@Then, fixture patterns), `web-selectors.md` (CSS-first priority, data-testid strategy, accessible locators), `api-testing.md` (Playwright request API, auth patterns). Inject relevant skill contextually: `playwright-bdd.md` when `generate_cucumber_pom` is called; `api-testing.md` when API steps detected.
+- [x] TF-NEW-13 — Register `workflow_guide` tool. Static data (no service). Workflows: `new_project`, `write_test`, `run_and_heal`, `debug_flaky`, `all`. Tool description says "START HERE IF UNSURE."
+- [x] TF-NEW-14 — Create `src/skills/playwright-bdd.md` (defineBddConfig, @Given/@When/@Then, fixture patterns), `web-selectors.md` (CSS-first priority, data-testid strategy, accessible locators), `api-testing.md` (Playwright request API, auth patterns). Inject relevant skill contextually: `playwright-bdd.md` when `generate_cucumber_pom` is called; `api-testing.md` when API steps detected.
 
 ---
 
@@ -392,18 +392,18 @@ Verified:
 **Effort:** M+M  
 **Files:** `src/index.ts`, new `src/utils/ExtensionLoader.ts`
 
-- [ ] TASK-46 — Rewrite every tool description to: `WHEN TO USE: [trigger] | WHAT IT DOES: [effect] | HOW IT WORKS: [logic]`. Add Anti-Usage notes. Add `TRIGGER: ...` / `RETURNS: ...` / `NEXT: ...` / `COST: ...` format (AppForge pattern).
-- [ ] TASK-25 — `ExtensionLoader`: reads, parses, formats project-specific config files (feature flags, logger config, API registries) for prompt injection. Wire into 5 services: `generate`, `analyze`, `heal`, `run`, `check`. Tests in `src/tests/ExtensionLoader.test.ts`.
+- [x] TASK-46 — Rewrite every tool description to: `WHEN TO USE: [trigger] | WHAT IT DOES: [effect] | HOW IT WORKS: [logic]`. Add Anti-Usage notes. Add `TRIGGER: ...` / `RETURNS: ...` / `NEXT: ...` / `COST: ...` format (AppForge pattern).
+- [x] TASK-25 — `ExtensionLoader`: reads, parses, formats project-specific config files (feature flags, logger config, API registries) for prompt injection. Wire into 5 services: `generate`, `analyze`, `heal`, `run`, `check`. Tests in `src/tests/ExtensionLoader.test.ts`.
 
 ---
 
 ### 5.3 · Minimal Echoes (Output Discipline)
-**ID:** TF-NEW-15  
+**ID:** TF-NEW-15 ✅ DONE
 **Effort:** S  
 **Files:** `src/index.ts` (descriptions only, runs after TASK-46)
 
-- [ ] Add `OUTPUT INSTRUCTIONS` block to every tool description: "Do NOT repeat file path or parameters. Do NOT summarise what you just did. Acknowledge in ≤10 words, then proceed. Keep response under 100 words unless explaining an error."
-- [ ] Apply immediately after TASK-46 so both changes land in one final description pass.
+- [x] Add `OUTPUT INSTRUCTIONS` block to every tool description: "Do NOT repeat file path or parameters. Do NOT summarise what you just did. Acknowledge in ≤10 words, then proceed. Keep response under 100 words unless explaining an error."
+- [x] Apply immediately after TASK-46 so both changes land in one final description pass.
 
 ---
 

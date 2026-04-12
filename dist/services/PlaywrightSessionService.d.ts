@@ -23,7 +23,7 @@ export declare class PlaywrightSessionService {
     /**
      * Navigates the persistent session to a URL.
      */
-    navigate(url: string, waitUntil?: 'load' | 'domcontentloaded' | 'networkidle'): Promise<string>;
+    navigate(url: string, waitUntil?: 'load' | 'domcontentloaded' | 'networkidle', timeoutMs?: number): Promise<string>;
     /**
      * Proactively verifies a selector without running a full test.
      * Checks if it resolves to exactly one element and if it is visible/enabled.

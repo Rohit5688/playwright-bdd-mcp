@@ -2,6 +2,11 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { ITestGenerator, GeneratedFile, TestGenerationResult } from '../interfaces/ITestGenerator.js';
 import type { CodebaseAnalysisResult } from '../interfaces/ICodebaseAnalyzer.js';
+import { HybridPromptEngine } from './HybridPromptEngine.js';
+import { ExtensionLoader } from '../utils/ExtensionLoader.js';
+
+// TASK-34: Max Gherkin screens kept in context for prompt compression
+const MAX_GHERKIN_SCREENS = 3;
 
 export class TestGenerationService implements ITestGenerator {
   
@@ -14,6 +19,8 @@ export class TestGenerationService implements ITestGenerator {
     memoryPrompt: string = ""
   ): Promise<string> {
     
+    memoryPrompt += ExtensionLoader.loadExtensionsForPrompt(projectRoot);
+
     // --- Phase 23: Extract team preferences from mcp-config.json if present ---
     const cfg = analysisResult.mcpConfig;
     const allowedTags: string[] = cfg?.allowedTags ?? ['@smoke', '@regression', '@e2e'];
@@ -191,6 +198,106 @@ Your entire response must be a single JSON object with this shape. DO NOT write 
 }
 `;
 
+    // TASK-34: Compress existing Gherkin context
+    const gherkinCtx = await this.compressFeatureFiles(projectRoot, analysisResult);
+    if (gherkinCtx) {
+      instructContent += `\n\n--- EXISTING FEATURE CONTEXT (last ${MAX_GHERKIN_SCREENS} screens, compressed) ---\n${gherkinCtx}`;
+    }
+
+    // TASK-34: Inject Mermaid nav graph if available
+    const navGraph = await this.injectNavGraph(projectRoot);
+    if (navGraph) {
+      instructContent += `\n\n--- NAVIGATION GRAPH (Mermaid — use to understand screen flow) ---\n${navGraph}`;
+    }
+
+    // TF-NEW-05: Inject 3-layer Hybrid Prompt block (CoT + Champion + Anti-Patterns)
+    const hybridEngine = new HybridPromptEngine();
+    const hybridBlock = hybridEngine.buildHybridBlock(analysisResult);
+    instructContent += `\n\n${hybridBlock}`;
+
     return instructContent;
+  }
+
+  /**
+   * TASK-34 — Gherkin Prompt Compression.
+   * Reads all .feature files in the project, extracts Scenario/Scenario Outline
+   * headings per file, and returns only the last MAX_GHERKIN_SCREENS unique
+   * screen contexts in a compact text block.
+   *
+   * Rationale: Large projects accumulate hundreds of Gherkin lines. The LLM only
+   * needs the most recent screen context to avoid step duplication — earlier
+   * screens are already encoded in the existingStepDefinitions analysis slice.
+   */
+  private async compressFeatureFiles(projectRoot: string, analysis: CodebaseAnalysisResult): Promise<string> {
+    try {
+      const featuresRoot = analysis.detectedPaths?.featuresRoot;
+      if (!featuresRoot) return '';
+
+      const absRoot = path.resolve(projectRoot, featuresRoot);
+      const entries = await fs.readdir(absRoot, { recursive: true }).catch(() => [] as string[]);
+      const featureFiles = (entries as string[]).filter(f => f.endsWith('.feature')).sort();
+
+      if (featureFiles.length === 0) return '';
+
+      // Collect screen summaries per file (Feature name + Scenario titles)
+      const screens: string[] = [];
+      for (const file of featureFiles) {
+        const absPath = path.join(absRoot, file);
+        const content = await fs.readFile(absPath, 'utf8').catch(() => '');
+        if (!content) continue;
+
+        const lines = content.split('\n');
+        const featureLine = lines.find(l => l.trim().startsWith('Feature:'))?.trim() ?? `Feature: ${file}`;
+        const scenarios = lines
+          .filter(l => l.trim().startsWith('Scenario:') || l.trim().startsWith('Scenario Outline:'))
+          .map(l => `  - ${l.trim()}`);
+
+        screens.push(`${featureLine}\n${scenarios.join('\n') || '  (no scenarios)'}`);
+      }
+
+      if (screens.length === 0) return '';
+
+      // Keep only the last N screens for context
+      const kept = screens.slice(-MAX_GHERKIN_SCREENS);
+      const dropped = screens.length - kept.length;
+      const header = dropped > 0
+        ? `[Compressed: showing ${kept.length} of ${screens.length} feature files — ${dropped} earlier file(s) omitted]`
+        : `[${kept.length} feature file(s)]`;
+
+      return `${header}\n\n${kept.join('\n\n')}`;
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * TASK-34 — Mermaid Navigation Graph Injection.
+   * Looks for a pre-built Mermaid diagram at .TestForge/nav-graph.md (generated
+   * by export_navigation_map or similar tooling). If found, includes it verbatim
+   * so the LLM understands screen-to-screen transitions before generating steps.
+   *
+   * Fallback: also accepts graphify-out/nav-graph.md for compatibility with
+   * projects using graphify to build their navigation maps.
+   */
+  private async injectNavGraph(projectRoot: string): Promise<string> {
+    const candidates = [
+      path.join(projectRoot, '.TestForge', 'nav-graph.md'),
+      path.join(projectRoot, 'graphify-out', 'nav-graph.md'),
+      path.join(projectRoot, 'docs', 'nav-graph.md'),
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        const content = await fs.readFile(candidate, 'utf8');
+        if (!content.trim()) continue;
+        // Cap to 3000 chars to stay within token budget
+        const capped = content.length > 3000 ? content.slice(0, 3000) + '\n... [graph truncated to stay within token budget]' : content;
+        return capped;
+      } catch {
+        // next candidate
+      }
+    }
+
+    return '';
   }
 }

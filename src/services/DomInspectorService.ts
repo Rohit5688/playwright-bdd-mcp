@@ -1,10 +1,12 @@
 import { chromium } from 'playwright';
 import type { Browser } from 'playwright';
 import type { IDomInspector, LoginMacro } from '../interfaces/IDomInspector.js';
+import { ScreenshotStorage } from '../utils/ScreenshotStorage.js';
+import { SmartDomExtractor } from '../utils/SmartDomExtractor.js';
 
 export class DomInspectorService implements IDomInspector {
 
-  public async inspect(url: string, waitForSelector?: string, storageState?: string, includeIframes?: boolean, loginMacro?: LoginMacro): Promise<string> {
+  public async inspect(url: string, waitForSelector?: string, storageState?: string, includeIframes?: boolean, loginMacro?: LoginMacro, timeoutMs: number = 30000): Promise<string> {
     let browser: Browser | null = null;
     try {
       browser = await chromium.launch({ headless: true });
@@ -18,7 +20,7 @@ export class DomInspectorService implements IDomInspector {
 
       // Dynamic Macro Login sequence
       if (loginMacro) {
-        await page.goto(loginMacro.loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(loginMacro.loginUrl, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
         await page.fill(loginMacro.userSelector, loginMacro.usernameValue);
         await page.fill(loginMacro.passSelector, loginMacro.passwordValue);
         await page.click(loginMacro.submitSelector);
@@ -26,7 +28,7 @@ export class DomInspectorService implements IDomInspector {
       }
 
       // Navigate to ultimate destination
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
       await page.waitForLoadState('networkidle').catch(() => {});
       
       if (waitForSelector) {
@@ -62,7 +64,14 @@ export class DomInspectorService implements IDomInspector {
         });
       }
       
-      const result: { mainFrame: unknown; iframes?: { url: string; snapshot: unknown }[] } = { mainFrame: mainSnapshot };
+      const result: { mainFrame: unknown; iframes?: { url: string; snapshot: unknown }[]; screenshot?: unknown } = { mainFrame: mainSnapshot };
+
+      try {
+        const buffer = await page.screenshot({ type: 'png', fullPage: false });
+        result.screenshot = ScreenshotStorage.storeBase64(process.cwd(), 'dom-inspect', buffer.toString('base64'));
+      } catch (e) {
+        // Soft fail screenshot capture
+      }
 
       // Optional recursive pass for inner frames (like Stripe fields or generic embedded sites)
       if (includeIframes) {
@@ -78,7 +87,9 @@ export class DomInspectorService implements IDomInspector {
         }
       }
 
-      return JSON.stringify(result, null, 2);
+      const rawJson = JSON.stringify(result, null, 2);
+      // TASK-62: transform raw AOM JSON → pruned Actionable Markdown
+      return SmartDomExtractor.extract(rawJson, url);
 
     } catch (error) {
       // --- 18A FIX: Friendly, actionable error messages ---

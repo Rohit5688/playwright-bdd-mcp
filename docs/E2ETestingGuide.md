@@ -106,7 +106,7 @@ This guide walks you through testing every feature of TestForge as an end user.
 
 **Expected:** Plain English summary with feature names, scenario titles, tag breakdown.
 
-## Test 13: Selenium Migration (`migrate_from_selenium`)
+## Test 13: Selenium Migration (`migrate_test`)
 
 **Prompt:**
 > "Migrate this Selenium Java code to Playwright-BDD: [paste code]"
@@ -179,7 +179,7 @@ This guide walks you through testing every feature of TestForge as an end user.
 | 10 | Configuration | `manage_config` | ☐ |
 | 11 | User Management | `manage_users` | ☐ |
 | 12 | Suite Summary | `summarize_suite` | ☐ |
-| 13 | Migration | `migrate_from_selenium` | ☐ |
+| 13 | Migration | `migrate_test` | ☐ |
 | 14 | Refactoring | `suggest_refactorings` | ☐ |
 | 15 | CI Pipeline | `generate_ci_pipeline` | ☐ |
 | 16 | Bug Export | `export_jira_bug` | ☐ |

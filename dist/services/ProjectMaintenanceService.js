@@ -1,12 +1,17 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { McpConfigService } from './McpConfigService.js';
 import { UserStoreService } from './UserStoreService.js';
 import { EnvManagerService } from './EnvManagerService.js';
 import { ProjectSetupService } from './ProjectSetupService.js';
-const execAsync = promisify(exec);
+import { withRetry, RetryPolicies } from '../utils/RetryEngine.js';
+const execFileAsync = promisify(execFile);
+/** Windows package manager shim: npm/npx need .cmd extension for execFile. */
+function resolveExe(name) {
+    return process.platform === 'win32' ? `${name}.cmd` : name;
+}
 /**
  * ProjectMaintenanceService — Phase 24 + Phase 8 Hardening
  *
@@ -73,6 +78,9 @@ export class ProjectMaintenanceService {
         // 1. Auto-maintenance
         const maintenanceLogs = await this.ensureUpToDate(root);
         logs.push(...maintenanceLogs);
+        // 1.5 Sync Config Schema
+        const schemaLogs = this.setupService.syncConfigSchema(root);
+        logs.push(...schemaLogs);
         // 2. Upgrade playwright-bdd to latest.
         // NOTE: Do NOT add @playwright/test to package.json — it is provided implicitly by
         // playwright-bdd. However, standard Playwright APIs (test, expect, etc.) SHOULD
@@ -80,7 +88,9 @@ export class ProjectMaintenanceService {
         // Explicitly adding both to package.json can cause duplicate test runner instances.
         try {
             logs.push('Updating playwright-bdd to latest...');
-            await execAsync('npm install --save-dev playwright-bdd@latest', { cwd: root, timeout: 120_000 });
+            // TASK-48: execFile instead of exec — prevents && chaining injection.
+            // TF-NEW-02: networkCall retry — npm registry is slow in some CI regions.
+            await withRetry(() => execFileAsync(resolveExe('npm'), ['install', '--save-dev', 'playwright-bdd@latest'], { cwd: root, timeout: 120_000 }), RetryPolicies.networkCall);
             logs.push('\u2705 playwright-bdd updated to latest (includes @playwright/test as a peer).');
         }
         catch (err) {
@@ -97,7 +107,8 @@ export class ProjectMaintenanceService {
         }
         else {
             try {
-                await execAsync('npx playwright install chromium firefox --with-deps', { cwd: root, timeout: 180_000 });
+                // TASK-48: execFile split — avoid injecting shell args through user-controlled paths.
+                await withRetry(() => execFileAsync(resolveExe('npx'), ['playwright', 'install', 'chromium', 'firefox', '--with-deps'], { cwd: root, timeout: 180_000 }), RetryPolicies.networkCall);
                 logs.push('✅ Playwright browsers installed.');
             }
             catch (err) {

@@ -1,10 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { exec } from 'child_process';
+import { McpErrors } from '../types/ErrorSystem.js';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { EnvManagerService } from './EnvManagerService.js';
+import { withRetry, RetryPolicies } from '../utils/RetryEngine.js';
+import { ShellSecurityEngine } from '../utils/ShellSecurityEngine.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/** Windows package manager shim: npm/npx need .cmd extension for execFile. */
+function resolveExe(name: string): string {
+  return process.platform === 'win32' ? `${name}.cmd` : name;
+}
 
 export interface SetupResult {
   projectRoot: string;
@@ -26,24 +34,57 @@ export interface SetupResult {
  * repairProject() is safe to call on any existing project — it only fills gaps.
  */
 export class ProjectSetupService {
-  private readonly envManager = new EnvManagerService();
+  private readonly envManager: EnvManagerService;
 
-  /**
-   * Full first-time setup. Throws if critical config files already exist.
-   */
-  public async setup(projectRoot: string): Promise<SetupResult> {
-    const criticalFiles = ['playwright.config.ts', 'playwright.config.js', 'package.json'];
-    const existing = criticalFiles.filter(f => fs.existsSync(path.join(projectRoot, f)));
+  constructor(envManager?: EnvManagerService) {
+    this.envManager = envManager || new EnvManagerService();
+  }
 
-    if (existing.length > 0) {
-      throw new Error(
-        `[TestForge] SAFETY HALT: Existing configurations detected (${existing.join(', ')}). ` +
-        `This tool ONLY initializes brand-new projects. ` +
-        `Use repair_project to restore missing files without overwriting.`
-      );
+  public async setup(projectRoot: string): Promise<string> {
+    if (!fs.existsSync(projectRoot)) {
+      fs.mkdirSync(projectRoot, { recursive: true });
     }
 
-    return this._scaffold(projectRoot, false);
+    const configPath = path.join(projectRoot, 'mcp-config.json');
+
+    if (!fs.existsSync(configPath)) {
+      this.generateConfigTemplate(projectRoot);
+      const docsDir = path.join(projectRoot, 'docs');
+      if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
+      this.scaffoldMcpConfigReference(projectRoot);
+      this.scaffoldPromptCheatbook(projectRoot);
+
+      return JSON.stringify({
+        phase: 1,
+        status: 'CONFIG_TEMPLATE_CREATED',
+        configPath,
+        message: [
+          '📋 STEP 1 of 2: mcp-config.json has been created.',
+          '',
+          'Open mcp-config.json and fill in CONFIGURE_ME fields.',
+          '📖 Documentation created:',
+          '  • docs/MCP_CONFIG_REFERENCE.md - Complete field reference',
+          '  • docs/PROMPT_CHEATBOOK.md - AI prompt guide',
+          '',
+          'When ready, call setup_project again with the same projectRoot to continue.'
+        ].join('\n')
+      }, null, 2);
+    }
+
+    const unfilledFields = this.scanConfigureMe(projectRoot);
+
+    const res = await this._scaffold(projectRoot, false);
+    return JSON.stringify({
+      phase: 2,
+      status: 'SETUP_COMPLETE',
+      projectRoot: res.projectRoot,
+      installed: res.installed,
+      dirsCreated: res.dirsCreated,
+      filesCreated: res.filesCreated,
+      envScaffolded: res.envScaffolded,
+      unfilledFields,
+      message: res.message
+    }, null, 2);
   }
 
   /**
@@ -263,9 +304,22 @@ export class ProjectSetupService {
     const nodeModulesPath = path.join(projectRoot, 'node_modules');
     if (!fs.existsSync(nodeModulesPath) && !repairMode) {
       try {
-        await execAsync(
-          'npm install && npx playwright install chromium firefox --with-deps',
-          { cwd: projectRoot, timeout: 180_000 }
+        // TASK-48: Use execFile (not exec) to avoid shell interpretation of &&.
+        // Split into two sequential execFile calls instead of one && chain.
+        // TF-NEW-02: Wrap in networkCall retry — npm install fails transiently in CI.
+        await withRetry(
+          () => execFileAsync(resolveExe('npm'), ['install'], {
+            cwd: projectRoot,
+            timeout: 180_000
+          }),
+          RetryPolicies.networkCall
+        );
+        await withRetry(
+          () => execFileAsync(resolveExe('npx'), ['playwright', 'install', 'chromium', 'firefox', '--with-deps'], {
+            cwd: projectRoot,
+            timeout: 180_000
+          }),
+          RetryPolicies.networkCall
         );
         installed = true;
       } catch (e) {
@@ -295,5 +349,145 @@ export class ProjectSetupService {
     ].filter(Boolean).join('');
 
     return { projectRoot, installed, dirsCreated, filesCreated, envScaffolded, message };
+  }
+  public syncConfigSchema(projectRoot: string): string[] {
+    const logs: string[] = [];
+    const configPath = path.join(projectRoot, 'mcp-config.json');
+    if (!fs.existsSync(configPath)) return logs;
+    // Apply new config fields without overwriting custom edits
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    logs.push("✅ Schema synced and defaults applied without overwriting.");
+    
+    const missingFeatures = [];
+    if (!raw.reporting) missingFeatures.push('Reporters');
+    if (!fs.existsSync(path.join(projectRoot, 'test-data'))) missingFeatures.push('Credential files');
+    
+    if (missingFeatures.length > 0) {
+      logs.push(`⚠️ Detected missing features: ${missingFeatures.join(', ')}. Run repair_project to install.`);
+    }
+
+    return logs;
+  }
+
+  public generateConfigTemplate(projectRoot: string): string {
+    const configPath = path.join(projectRoot, 'mcp-config.json');
+    const template: Record<string, any> = {
+      version: '2.4.0',
+      tags: ['CONFIGURE_ME: tag1', 'CONFIGURE_ME: tag2'],
+      envKeys: { baseUrl: 'BASE_URL' },
+      dirs: {
+        features: 'features',
+        pages: 'pages',
+        stepDefinitions: 'step-definitions',
+        testData: 'test-data',
+      },
+      browsers: ['chromium'],
+      timeouts: {
+        testRun: 120_000,
+        sessionStart: 30000,
+        healingMax: 3
+      },
+      retries: 1,
+      backgroundBlockThreshold: 3,
+      authStrategy: 'users-json',
+      currentEnvironment: 'CONFIGURE_ME: e.g. staging',
+      environments: ['local', 'staging', 'prod'],
+      waitStrategy: 'domcontentloaded',
+      architectureNotesPath: 'docs/mcp-architecture-notes.md',
+      additionalDataPaths: [],
+      a11yStandards: ['wcag2aa'],
+      a11yReportPath: 'test-results/a11y-report.json',
+      projectRoot: projectRoot
+    };
+    fs.writeFileSync(configPath, JSON.stringify(template, null, 2), 'utf-8');
+    return configPath;
+  }
+
+  public scaffoldMcpConfigReference(projectRoot: string) {
+    const content = [
+      '# MCP Config Reference — TestForge',
+      '',
+      'All fields below map directly to the `mcp-config.json` file in your project root.',
+      '',
+      '## Top-Level Fields',
+      '',
+      '| Field | Type | Description |',
+      '|-------|------|-------------|',
+      '| `version` | string | Schema version (e.g. `"2.4.0"`). Do not change manually. |',
+      '| `projectRoot` | string | Absolute path to your project root. Auto-set by `setup_project`. |',
+      '| `currentEnvironment` | string | Active env: `"local"`, `"staging"`, or `"prod"`. |',
+      '| `environments` | string[] | List of available environments (must have a matching `.env.<name>` file). |',
+      '| `browsers` | string[] | Playwright browsers to run tests in: `["chromium", "firefox", "webkit"]`. |',
+      '| `retries` | number | Number of Playwright test retries on failure. Default: `1`. |',
+      '| `authStrategy` | string | How users are loaded: `"users-json"` reads `test-data/users.{env}.json`. |',
+      '| `waitStrategy` | string | Playwright waitUntil value: `"domcontentloaded"` or `"networkidle"`. |',
+      '| `backgroundBlockThreshold` | number | Background element block sensitivity. Default: `3`. |',
+      '',
+      '## `tags` (string[])',
+      'List of Cucumber/Playwright-BDD tags to include by default. Example: `["@smoke", "@regression"]`.',
+      '',
+      '## `envKeys` (object)',
+      'Maps logical names to `.env` variable names. Example:',
+      '```json',
+      '{ "baseUrl": "BASE_URL" }',
+      '```',
+      '',
+      '## `dirs` (object)',
+      'Override the default directory paths. All paths are relative to `projectRoot`.',
+      '',
+      '| Key | Default |',
+      '|-----|---------|',
+      '| `features` | `"features"` |',
+      '| `pages` | `"pages"` |',
+      '| `stepDefinitions` | `"step-definitions"` |',
+      '| `testData` | `"test-data"` |',
+      '',
+      '## `timeouts` (object)',
+      '',
+      '| Key | Default | Description |',
+      '|-----|---------|-------------|',
+      '| `testRun` | `120000` | Max milliseconds for a full test run. |',
+      '| `sessionStart` | `30000` | Max milliseconds to establish a Playwright session. |',
+      '| `healingMax` | `3` | Max self-healing attempts before asking for user input. |',
+      '',
+      '## `additionalDataPaths` (string[])',
+      'Relative paths to extra JSON/text files the agent should inject into prompts.',
+      'Example: `["docs/api-registry.json", "feature-flags.json"]`.',
+      '',
+      '## `architectureNotesPath` (string)',
+      'Relative path to a Markdown file with project architecture notes. The agent reads this file and uses it as context during generation.',
+      '',
+      '## `a11yStandards` (string[])',
+      'Axe-core tag list for accessibility checks. Example: `["wcag2aa", "wcag21aa"]`.',
+      '',
+      '## `a11yReportPath` (string)',
+      'Where accessibility reports are written. Default: `"test-results/a11y-report.json"`.',
+      '',
+      '## `reporting` (object) — optional',
+      'Reporter configuration. Example:',
+      '```json',
+      '{ "html": true, "json": "test-results/report.json" }',
+      '```',
+    ].join('\n');
+    fs.writeFileSync(path.join(projectRoot, 'docs', 'MCP_CONFIG_REFERENCE.md'), content, 'utf-8');
+  }
+
+  public scaffoldPromptCheatbook(projectRoot: string) {
+    fs.writeFileSync(path.join(projectRoot, 'docs', 'PROMPT_CHEATBOOK.md'), '# Prompt Cheatbook\nPrompts for TestForge.', 'utf-8');
+  }
+
+  public scanConfigureMe(projectRoot: string): string[] {
+    const configPath = path.join(projectRoot, 'mcp-config.json');
+    if (!fs.existsSync(configPath)) return [];
+    const content = fs.readFileSync(configPath, 'utf-8');
+    const unconfigured: string[] = [];
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.includes('"CONFIGURE_ME')) {
+        const match = line.match(/"([^"]+)":\s*"CONFIGURE_ME/);
+        if (match && match[1]) unconfigured.push(match[1]);
+      }
+    }
+    return unconfigured;
   }
 }

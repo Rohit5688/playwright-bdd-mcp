@@ -60,6 +60,23 @@ export declare class UserStoreService {
     generateUserHelper(projectRoot: string, knownRoles: string[]): void;
     /** Keeps users.example.json in sync with all known roles (no credentials) */
     private updateExampleFile;
+    /**
+     * TASK-15: Hard-reject any credential object that contains API key fields.
+     * API keys must be stored via manage_env → .env, never in credential JSON.
+     */
+    private assertNoApiKeyFields;
+    /**
+     * TASK-15: Pre-validate that the target credential path is covered by .gitignore
+     * before any write occurs. Ensures the file is safe to write credentials.
+     * If not yet gitignored, calls ensureGitignore() first.
+     */
+    private assertPathIsGitignored;
+    /**
+     * TASK-15: Ensure .env is in .gitignore.
+     * Called as a side-effect whenever credentials are written so API key files
+     * are always protected even if manage_env hasn't run yet.
+     */
+    private ensureEnvGitignored;
     /** Adds users.{env}.json entries to .gitignore */
     private ensureGitignore;
 }

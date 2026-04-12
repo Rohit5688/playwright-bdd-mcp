@@ -2,6 +2,9 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Project, SyntaxKind, Node } from 'ts-morph';
 import { McpConfigService, DEFAULT_CONFIG } from './McpConfigService.js';
+import { McpErrors } from '../types/ErrorSystem.js';
+import { DependencyService } from './DependencyService.js';
+import { ExtensionLoader } from '../utils/ExtensionLoader.js';
 export class CodebaseAnalyzerService {
     async analyze(projectRoot, customWrapperPackage) {
         const result = {
@@ -19,15 +22,24 @@ export class CodebaseAnalyzerService {
                 pagesRoot: 'pages',
                 utilsRoot: 'utils'
             },
-            recommendation: ''
+            recommendation: '',
+            warnings: []
         };
         const mcpConfig = new McpConfigService();
         const config = mcpConfig.read(projectRoot);
+        // Inject config.dirs as starting point for path detection
+        result.detectedPaths.featuresRoot = config.dirs.features;
+        result.detectedPaths.stepsRoot = config.dirs.stepDefinitions;
+        result.detectedPaths.pagesRoot = config.dirs.pages;
         result.mcpConfig = {
             version: config.version || '0.0.0',
             upgradeNeeded: (config.version || '0.0.0') < DEFAULT_CONFIG.version,
             allowedTags: config.tags
         };
+        const depService = new DependencyService();
+        const deps = depService.parseDependencies(projectRoot);
+        const finalDeps = depService.detectImplicitFrameworks(projectRoot, deps);
+        result.dependencies = finalDeps;
         try {
             // 1. Check for Playwright Config
             const configPath = path.join(projectRoot, 'playwright.config.ts');
@@ -55,7 +67,15 @@ export class CodebaseAnalyzerService {
                 for (const f of tsFiles) {
                     if (f.includes('node_modules') || f.includes('playwright.config') || f.includes('mcp-config') || f.endsWith('d.ts'))
                         continue;
-                    project.addSourceFileAtPath(f);
+                    try {
+                        project.addSourceFileAtPath(f);
+                    }
+                    catch (e) {
+                        const warning = McpErrors.astParseFailed(f, e).message;
+                        result.warnings = result.warnings || [];
+                        result.warnings.push(warning);
+                        console.warn(`[CodebaseAnalyzerService] ${warning}`);
+                    }
                 }
                 for (const sourceFile of project.getSourceFiles()) {
                     const filePath = sourceFile.getFilePath();
@@ -65,7 +85,7 @@ export class CodebaseAnalyzerService {
                     const steps = this.extractSteps(content);
                     if (steps.length > 0) {
                         stepDefs.push({ file: relPath, steps });
-                        if (result.detectedPaths.stepsRoot === 'step-definitions')
+                        if (result.detectedPaths.stepsRoot === config.dirs.stepDefinitions)
                             result.detectedPaths.stepsRoot = path.dirname(relPath);
                         continue;
                     }
@@ -125,7 +145,7 @@ export class CodebaseAnalyzerService {
                             isPageObject = true;
                         }
                     }
-                    if (isPageObject && result.detectedPaths.pagesRoot === 'pages') {
+                    if (isPageObject && result.detectedPaths.pagesRoot === config.dirs.pages) {
                         result.detectedPaths.pagesRoot = path.dirname(relPath);
                     }
                     // Check for custom wrapper override
@@ -377,6 +397,10 @@ RULES FOR AI:
                 result.duplicateInstallWarnings = warnings;
                 result.recommendation += "\nCRITICAL WARNING: Multiple @playwright/test installations detected. This will cause 'describe() unexpectedly called' errors. You MUST uninstall the duplicates.";
             }
+            if (result.dependencies?.implicitFrameworkDetected) {
+                result.recommendation += `\nIMPLICIT FRAMEWORK DETECTED: The dependency manager didn't declare ${result.dependencies.frameworkDetected}, but structural code fingerprints confirmed it. Playwright-BDD features are fully supported.`;
+            }
+            result.recommendation += ExtensionLoader.loadExtensionsForPrompt(projectRoot);
         }
         catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

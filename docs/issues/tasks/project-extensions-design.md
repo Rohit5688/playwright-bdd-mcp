@@ -234,16 +234,16 @@ These are complementary, not competing:
 
 ---
 
-## Implementation Plan
+## Implementation Plan (IMPLEMENTED)
 
-### Phase 1 — Schema Only (add to TASK-04 / TASK-18)
-- Add `ProjectExtension` interface to `McpConfigService.ts` (both repos)
-- Add `projectExtensions?: ProjectExtension[]` to `McpConfig` interface
-- Add empty array `[]` as default in `DEFAULT_CONFIG`
-- Add example entries (commented out) in `scaffoldMcpConfig()`
+### Phase 1 — Schema Only (added to TASK-04 / TASK-18)
+- Added `ProjectExtension` interface to `McpConfigService.ts` (both repos)
+- Added `projectExtensions?: ProjectExtension[]` to `McpConfig` interface
+- Added empty array `[]` as default in `DEFAULT_CONFIG`
+- Added example entries (commented out) in `scaffoldMcpConfig()`
 
-### Phase 2 — Utility (new shared util, ~1 session)
-Create `src/utils/ExtensionLoader.ts`:
+### Phase 2 — Utility (new shared util)
+Created `src/utils/ExtensionLoader.ts`:
 ```ts
 export async function loadExtensionsForOperation(
   projectRoot: string,
@@ -258,13 +258,15 @@ This utility:
 3. Parses by `format` (auto-detect from extension if omitted)
 4. Returns a formatted markdown context block
 
-### Phase 3 — Wire Up (1 session per service)
-Wire `loadExtensionsForOperation()` into:
+### Phase 3 — Wire Up (done per service)
+Wired `loadExtensionsForOperation()` into:
 - `TestGenerationService.ts` → `'generate'`
 - `CodebaseAnalyzerService.ts` → `'analyze'`
 - `SelfHealingService.ts` → `'heal'`
 - `TestRunnerService.ts` → `'run'` (env var injection, not prompt)
 - `EnvironmentCheckService.ts` → `'check'` (existence validation, not prompt)
+
+> **Note for AppForge users**: This design document applies equally to AppForge. If you are reading this from an AppForge context, please refer to this TestForge document space as the source of truth for the `projectExtensions` architectural pattern.
 
 ---
 

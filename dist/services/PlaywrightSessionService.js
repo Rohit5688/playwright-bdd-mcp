@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { withRetry, RetryPolicies } from '../utils/RetryEngine.js';
 export class PlaywrightSessionService {
     browser = null;
     context = null;
@@ -15,10 +16,12 @@ export class PlaywrightSessionService {
             }, null, 2);
         }
         try {
-            this.browser = await chromium.launch({
+            // TF-NEW-02: Retry browser launch — transient in CI (missing binary, stale lock, etc.)
+            const launchResult = await withRetry(() => chromium.launch({
                 headless: options.headless !== false, // default to headless unless explicitly false
                 args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
-            });
+            }), RetryPolicies.playwrightBrowser);
+            this.browser = launchResult.value;
             const contextOptions = {
                 viewport: options.viewport || { width: 1280, height: 720 }
             };
@@ -68,7 +71,7 @@ export class PlaywrightSessionService {
     /**
      * Navigates the persistent session to a URL.
      */
-    async navigate(url, waitUntil = 'load') {
+    async navigate(url, waitUntil = 'load', timeoutMs = 30000) {
         if (!this.page) {
             // Auto-start if forgotten
             await this.startSession();
@@ -78,7 +81,7 @@ export class PlaywrightSessionService {
             if (!url.startsWith('http://') && !url.startsWith('https://')) {
                 finalUrl = `https://${url}`;
             }
-            const response = await this.page.goto(finalUrl, { waitUntil, timeout: 30000 });
+            const response = await this.page.goto(finalUrl, { waitUntil, timeout: timeoutMs });
             return JSON.stringify({
                 success: true,
                 url: this.page.url(),
