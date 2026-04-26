@@ -2,7 +2,39 @@ node_modules/
 dist/
 binaries/
 test-results/
-.env
+.env*
 .mcp-staging/
 .pkg-cache/
 *.log
+
+# Project-specific temporary files
+.AppForge/
+.TestForge/
+graphify-out/
+mcp-logs/
+scratch/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Environment secrets
+.env.local
+
+# Environment secrets
+.env.staging
+
+# Environment secrets
+.env.prod
+
+# User credential stores (never commit)
+test-data/users.local.json
+
+# Local environment / API keys (never commit)
+.env
+
+# User credential stores (never commit)
+test-data/users.staging.json
+
+# User credential stores (never commit)
+test-data/users.prod.json

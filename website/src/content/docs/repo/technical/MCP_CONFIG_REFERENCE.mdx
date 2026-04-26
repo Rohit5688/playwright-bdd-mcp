@@ -1,0 +1,232 @@
+---
+title: Master Configuration Reference
+description: Complete field-by-field reference for mcp-config.json — every property, type, default, and example.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+`mcp-config.json` is the central brain of every TestForge project. It controls project structure, browser selection, authentication strategies, timeout tuning, and AI generation context. Every tool reads this file at invocation time.
+
+:::note[Deep Merge Strategy]
+TestForge uses deep merge — any property you omit falls back to system defaults. You never need to include every field. Start minimal and add only what you need to override.
+:::
+
+---
+
+## 📋 Complete Schema
+
+```json
+{
+  "version": "2.4.0",
+
+  "baseUrl": "https://staging.myapp.com",
+  "currentEnvironment": "staging",
+  "environments": ["local", "staging", "prod", "qa"],
+
+  "browsers": ["chromium"],
+
+  "dirs": {
+    "features": "features",
+    "pages": "pages",
+    "stepDefinitions": "step-definitions",
+    "testData": "test-data",
+    "reports": "mcp-logs"
+  },
+
+  "executionCommand": "npx playwright test",
+
+  "basePageClass": "pages/BasePage",
+  "customWrapperPackage": null,
+
+  "timeouts": {
+    "global": 30000,
+    "sessionStart": 45000,
+    "healingMax": 3,
+    "sandboxExec": 10000
+  },
+
+  "credentials": {
+    "strategy": "users-json",
+    "file": "test-data/users.staging.json",
+    "schemaHint": "JSON with username, password, and role fields"
+  },
+
+  "envKeys": {
+    "baseUrl": "APP_URL",
+    "apiKey": "STAGING_API_TOKEN"
+  },
+
+  "tags": ["@smoke", "@regression", "@critical"],
+
+  "waitStrategy": "networkidle",
+  "enableVisualExploration": false,
+
+  "reporting": {
+    "outputDir": "mcp-logs",
+    "format": "jsonl"
+  }
+}
+```
+
+---
+
+## 🔑 Field Reference — Core
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `version` | `string` | `"2.4.0"` | Config schema version. Checked by `upgrade_project` to detect migration needs. Do not edit manually. |
+| `baseUrl` | `string` | **Required** | The root URL of the application under test. Every `inspect_page_dom` call and generated test resolves URLs relative to this. |
+| `currentEnvironment` | `string` | `"staging"` | Active environment name. Determines which `users.{env}.json` file is loaded and which `.env` keys are active. |
+| `environments` | `string[]` | `["staging"]` | All valid environment names for the project. Used by `manage_users` to validate environment arguments. |
+| `browsers` | `string[]` | `["chromium"]` | Browsers for test execution. Valid values: `"chromium"`, `"firefox"`, `"webkit"`. Pass multiple for cross-browser runs. |
+| `executionCommand` | `string` | `"npx playwright test"` | The exact shell command that `run_playwright_test` invokes. Override for `yarn`, Nx, or custom scripts. Example: `"yarn workspace myapp e2e"`. |
+
+---
+
+## 📁 Field Reference — Directories (`dirs`)
+
+All paths are **relative to `projectRoot`**.
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `dirs.features` | `string` | `"features"` | Root directory for `.feature` files. `generate_gherkin_pom_test_suite` writes here. |
+| `dirs.pages` | `string` | `"pages"` | Root for Page Object classes. `audit_locators` scans this directory. |
+| `dirs.stepDefinitions` | `string` | `"step-definitions"` | Root for Cucumber step implementation files. |
+| `dirs.testData` | `string` | `"test-data"` | Root for fixtures, user stores, and mock data files. |
+| `dirs.reports` | `string` | `"mcp-logs"` | Output directory for session logs, Cucumber JSON reports, and the Forge Session Viewer HTML. |
+
+---
+
+## ⏱️ Field Reference — Timeouts
+
+All values are in **milliseconds (ms)**.
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `timeouts.global` | `number` | `30000` | Default Playwright action timeout (clicks, inputs, navigation waits). Increase for slow apps. |
+| `timeouts.sessionStart` | `number` | `45000` | Max time for `start_session` to boot a browser and reach `baseUrl`. |
+| `timeouts.healingMax` | `number` | `3` | Number of self-healing retry loops `validate_and_write` will attempt before surfacing the error. |
+| `timeouts.sandboxExec` | `number` | `10000` | Max time for a single `execute_sandbox_code` script before it's terminated. |
+
+---
+
+## 🔒 Field Reference — Authentication
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `credentials.strategy` | `"users-json" \| "env" \| "none"` | `"users-json"` | How test credentials are sourced. |
+| `credentials.file` | `string` | `"test-data/users.{env}.json"` | Path to users file. The `{env}` token is replaced with `currentEnvironment`. |
+| `credentials.schemaHint` | `string` | — | Free-text description of the user schema. Helps the AI understand the data shape without reading the file. |
+
+**Strategy comparison:**
+
+| Strategy | How it works | Best for |
+| :--- | :--- | :--- |
+| `users-json` | Loads `users.{env}.json`, provides typed `getUser()` helper | Enterprise teams with multiple roles |
+| `env` | Reads credentials from `.env` variables via `envKeys` map | Legacy projects, quick setup |
+| `none` | No credentials loaded — public site testing only | Marketing sites, public APIs |
+
+---
+
+## 🔗 Field Reference — Environment Variable Mapping (`envKeys`)
+
+`envKeys` maps semantic names to actual `.env` variable names. This lets you reference `config.baseUrl` in generated tests without hardcoding the variable name.
+
+```json
+"envKeys": {
+  "baseUrl": "APP_URL",
+  "apiKey": "STAGING_X_TOKEN",
+  "adminEmail": "ADMIN_EMAIL"
+}
+```
+
+At runtime, TestForge reads `process.env.APP_URL` and surfaces it as `baseUrl`. The actual variable name never appears in generated code.
+
+---
+
+## 🎯 Field Reference — Generation Context
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `basePageClass` | `string` | `"pages/BasePage"` | Relative path (without `.ts`) to your base page class. All generated Page Objects will `extend` this class. |
+| `customWrapperPackage` | `string \| null` | `null` | If you use an npm package as your base page (e.g., `@myorg/playwright-helpers`), set it here. TestForge will import from this package instead of a local file. |
+| `tags` | `string[]` | `["@smoke"]` | Default Cucumber tags applied to generated scenarios. Also used as the default filter for `run_playwright_test`. |
+| `waitStrategy` | `"domcontentloaded" \| "load" \| "networkidle"` | `"networkidle"` | Page load strategy for `inspect_page_dom`. Use `networkidle` for SPAs, `load` for static sites. |
+| `enableVisualExploration` | `boolean` | `false` | When `true`, captures full-page screenshots during `inspect_page_dom` and stores them in `mcp-logs/` for visual parity review. |
+
+---
+
+## 🌍 Multi-Environment Example
+
+Run without editing the config file — just switch environment in your prompt:
+
+```
+"Switch TestForge to the prod environment"
+```
+
+This calls `manage_config({ operation: "write", config: { currentEnvironment: "prod" } })`, which:
+1. Updates `currentEnvironment` to `"prod"` in the config (deep merge)
+2. Reloads `users.prod.json` for subsequent test runs
+3. Reads `process.env[envKeys.baseUrl]` for the prod URL
+
+---
+
+## 🖥️ Multiple Browsers Example
+
+```json
+{
+  "browsers": ["chromium", "firefox", "webkit"],
+  "executionCommand": "npx playwright test --project=chromium --project=firefox"
+}
+```
+
+:::tip[Webkit Note]
+WebKit (Safari) tests require macOS or a Docker image with WebKit support. Linux CI runners need `--project=chromium --project=firefox` only unless you use the Playwright Docker image.
+:::
+
+---
+
+## 🏭 Production-Ready Example
+
+```json
+{
+  "version": "2.4.0",
+  "baseUrl": "https://staging.myapp.com",
+  "currentEnvironment": "staging",
+  "environments": ["local", "staging", "prod"],
+  "browsers": ["chromium", "firefox"],
+  "dirs": {
+    "features": "e2e/features",
+    "pages": "e2e/pages",
+    "stepDefinitions": "e2e/steps",
+    "testData": "e2e/data"
+  },
+  "executionCommand": "npx playwright test --workers=4",
+  "basePageClass": "e2e/support/BasePage",
+  "timeouts": {
+    "global": 45000,
+    "sessionStart": 60000,
+    "healingMax": 5,
+    "sandboxExec": 15000
+  },
+  "credentials": {
+    "strategy": "users-json",
+    "file": "e2e/data/users.{env}.json"
+  },
+  "envKeys": {
+    "baseUrl": "STAGING_URL",
+    "apiKey": "STAGING_API_TOKEN"
+  },
+  "tags": ["@smoke", "@critical", "@regression"],
+  "waitStrategy": "networkidle",
+  "enableVisualExploration": true
+}
+```
+
+---
+
+## Related Pages
+
+- [Installation & MCP Setup](/TestForge/repo/user/installation/) — connecting TestForge to your AI client
+- [Troubleshooting](/TestForge/repo/user/troubleshooting/) — `baseUrl unreachable` and other config errors
+- [Master Tool Reference](/TestForge/api/tools/#manage_config) — `manage_config` tool details
